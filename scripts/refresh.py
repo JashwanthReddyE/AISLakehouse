@@ -45,7 +45,8 @@ PIPELINE = [
         "eh_namespace_fqdn": EH_NS, "eh_name": "ais-raw", "storage_account": STORAGE,
         "lake_container": CONTAINER, "secret_scope": SCOPE,
     }),
-    ("silver_stream", {"storage_account": STORAGE, "lake_container": CONTAINER, "watermark": "2 hours"}),
+    ("silver_stream",
+     {"storage_account": STORAGE, "lake_container": CONTAINER, "watermark": "2 hours"}),
     ("gold_dark_vessel", {
         "storage_account": STORAGE, "lake_container": CONTAINER,
         "gap_threshold_s": "1800", "normal_multiplier": "4.0",
@@ -97,7 +98,8 @@ def run_task(name: str, params: dict[str, str]) -> str:
         if life in ("TERMINATED", "SKIPPED", "INTERNAL_ERROR"):
             result_state = run["state"].get("result_state")
             if result_state != "SUCCESS":
-                sys.exit(f"Task {name} finished {result_state}: {run['state'].get('state_message')}")
+                msg = run["state"].get("state_message")
+                sys.exit(f"Task {name} finished {result_state}: {msg}")
             task_run_id = run["tasks"][0]["run_id"]
             out = json.loads(dbx("jobs", "get-run-output", str(task_run_id), "--output", "json"))
             result = out.get("notebook_output", {}).get("result", "")
