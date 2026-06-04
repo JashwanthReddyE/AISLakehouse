@@ -6,8 +6,8 @@ Event Hubs, and builds a Medallion lakehouse on Databricks + ADLS Gen2 — with 
 **vessel-behavior analytics** (dark-vessel detection, loitering, port-call inference) rather than
 "dots on a map."
 
-> **Status: Week 1** — ingestion slice proven end-to-end:
-> `AISStream → local Python consumer → Event Hubs → Databricks Structured Streaming → bronze Delta`.
+> **Status: Week 2 (silver) complete.** Proven end-to-end:
+> `AISStream → consumer → Event Hubs → bronze Delta → silver (clean/deduped/enriched + quarantine)`.
 
 ## Architecture (Week 1 slice)
 
@@ -44,9 +44,11 @@ Event Hubs, and builds a Medallion lakehouse on Databricks + ADLS Gen2 — with 
 | Path | Purpose |
 |---|---|
 | `ingestion/` | Always-on WebSocket consumer + Event Hubs producer |
+| `silver/` | Pure-Python (unit-tested) silver logic: MMSI→flag, destination normalization, DQ |
 | `databricks/bronze_stream.py` | Structured Streaming bronze write |
+| `databricks/silver_stream.py` | bronze→silver: parse, watermark+dedup, enrich, DQ quarantine |
 | `infra/` | Bicep IaC (budget alert first, Event Hubs, ADLS Gen2, Key Vault) |
-| `tests/` | Unit tests (no network): config, backoff/heartbeat, producer batching |
+| `tests/` | Unit tests (no network): config, backoff/heartbeat, producer, MMSI, destinations, DQ |
 | `.github/workflows/ci.yml` | ruff + pytest on PR |
 
 ## Quickstart (local ingestion)
@@ -74,8 +76,8 @@ python -m ingestion.main
 
 ## Roadmap
 
-- **Week 2 — Silver:** parse `PositionReport`/`ShipStaticData`, watermarked dedup on
-  `(MMSI, event_time)`, MMSI→flag enrichment, destination normalization, DQ quarantine.
+- **Week 2 — Silver:** ✅ done. Parses `PositionReport`/`ShipStaticData`, watermarked dedup on
+  `(MMSI, event_time)`, MMSI→flag enrichment, destination normalization, DQ quarantine (rate ~1.9%).
 - **Week 3 — Gold:** dark-vessel detection (primary), dbt models + tests, minimal serving.
 - **Week 4 — Maturity:** Container Apps deploy, CI/CD, scheduled gold refresh + LLM daily brief,
   observability, teardown script.

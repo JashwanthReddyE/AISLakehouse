@@ -21,7 +21,10 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["ingestion"]
+packages = ["ingestion", "silver", "silver.reference"]
+
+[tool.setuptools.package-data]
+"silver.reference" = ["*.json"]
 
 [tool.ruff]
 line-length = 100
