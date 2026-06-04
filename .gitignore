@@ -1,0 +1,28 @@
+# Secrets / local config
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Streaming / lake artifacts (never commit checkpoints or local data)
+_checkpoints/
+checkpoints/
+*.delta/
+local_data/
+
+# Azure / IaC
+*.azureauth
+.bicep/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
