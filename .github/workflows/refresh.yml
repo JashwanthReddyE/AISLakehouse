@@ -1,0 +1,43 @@
+name: Refresh dashboard
+
+# Hourly: re-run the lakehouse pipeline, rebuild the dashboard, redeploy to Vercel.
+# Also runnable on demand from the Actions tab (workflow_dispatch).
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+# Don't let a slow run overlap the next scheduled one.
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Run pipeline + export metrics
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: python scripts/refresh.py
+
+      - name: Rebuild dashboard
+        run: python serving/build_dashboard.py
+
+      - name: Deploy to Vercel
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          npm install --global vercel@latest
+          vercel deploy --prod --yes --token="${{ secrets.VERCEL_TOKEN }}"

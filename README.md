@@ -90,6 +90,26 @@ python serving/build_dashboard.py
 # 3. open serving/index.html  (or host serving/ on GitHub Pages / Vercel)
 ```
 
+## Automatic refresh (scheduled)
+
+[`.github/workflows/refresh.yml`](.github/workflows/refresh.yml) runs **hourly** (and on demand
+from the Actions tab): it re-runs the lakehouse pipeline via
+[`scripts/refresh.py`](scripts/refresh.py) (bronze → silver → gold → tanker → export),
+rebuilds the dashboard, and redeploys to Vercel. The 24/7 consumer keeps feeding bronze, so each
+run reflects the latest ships.
+
+**Required GitHub repo secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Where to get it |
+|---|---|
+| `DATABRICKS_HOST` | Your workspace URL, e.g. `https://dbc-xxxx.cloud.databricks.com` |
+| `DATABRICKS_TOKEN` | Databricks → Settings → Developer → **Access tokens** → Generate |
+| `VERCEL_TOKEN` | vercel.com → Account Settings → **Tokens** → Create |
+| `VERCEL_ORG_ID` | `.vercel/project.json` → `orgId` (created by `vercel link`) |
+| `VERCEL_PROJECT_ID` | `.vercel/project.json` → `projectId` |
+
+A manual refresh (no schedule) is just: `python scripts/refresh.py && python serving/build_dashboard.py && vercel deploy --prod`.
+
 ## Cost discipline (non-negotiable)
 
 - **Budget + alert is created before any billable resource.**
