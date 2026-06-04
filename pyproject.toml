@@ -21,7 +21,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["ingestion", "silver", "silver.reference"]
+packages = ["ingestion", "silver", "silver.reference", "gold"]
 
 [tool.setuptools.package-data]
 "silver.reference" = ["*.json"]

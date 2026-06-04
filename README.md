@@ -6,8 +6,8 @@ Event Hubs, and builds a Medallion lakehouse on Databricks + ADLS Gen2 — with 
 **vessel-behavior analytics** (dark-vessel detection, loitering, port-call inference) rather than
 "dots on a map."
 
-> **Status: Week 2 (silver) complete.** Proven end-to-end:
-> `AISStream → consumer → Event Hubs → bronze Delta → silver (clean/deduped/enriched + quarantine)`.
+> **Status: Week 3 (gold) — dark-vessel detection working.** Proven end-to-end:
+> `AISStream → consumer → Event Hubs → bronze → silver (clean/dedup/enrich + quarantine) → gold (dark events)`.
 
 ## Architecture (Week 1 slice)
 
@@ -45,8 +45,10 @@ Event Hubs, and builds a Medallion lakehouse on Databricks + ADLS Gen2 — with 
 |---|---|
 | `ingestion/` | Always-on WebSocket consumer + Event Hubs producer |
 | `silver/` | Pure-Python (unit-tested) silver logic: MMSI→flag, destination normalization, DQ |
+| `gold/` | Pure-Python (unit-tested) dark-vessel detection: gap analysis + confidence scoring |
 | `databricks/bronze_stream.py` | Structured Streaming bronze write |
 | `databricks/silver_stream.py` | bronze→silver: parse, watermark+dedup, enrich, DQ quarantine |
+| `databricks/gold_dark_vessel.py` | silver→gold: per-vessel reporting-gap detection → `dark_events` |
 | `infra/` | Bicep IaC (budget alert first, Event Hubs, ADLS Gen2, Key Vault) |
 | `tests/` | Unit tests (no network): config, backoff/heartbeat, producer, MMSI, destinations, DQ |
 | `.github/workflows/ci.yml` | ruff + pytest on PR |
@@ -78,6 +80,11 @@ python -m ingestion.main
 
 - **Week 2 — Silver:** ✅ done. Parses `PositionReport`/`ShipStaticData`, watermarked dedup on
   `(MMSI, event_time)`, MMSI→flag enrichment, destination normalization, DQ quarantine (rate ~1.9%).
-- **Week 3 — Gold:** dark-vessel detection (primary), dbt models + tests, minimal serving.
-- **Week 4 — Maturity:** Container Apps deploy, CI/CD, scheduled gold refresh + LLM daily brief,
-  observability, teardown script.
+- **Week 3 — Gold:** ✅ dark-vessel detection working end-to-end (gap analysis + confidence,
+  unit-tested). Remaining: optional dbt formalization + minimal serving query.
+- **Week 4 — Maturity:** Container Apps deploy (24/7 ingestion), CI/CD, scheduled gold refresh +
+  LLM daily brief, observability, teardown script.
+
+> **Dark-vessel caveat:** terrestrial AIS has genuine coverage dead zones, and sparse ingestion
+> creates gaps too — so a dark event is a *candidate* signal, not proof of intent. Continuous
+> ingestion (Week 4) is what turns these from coverage artifacts into real behavior signal.
