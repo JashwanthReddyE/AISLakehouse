@@ -3,67 +3,229 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AISLakehouse — Maritime Behavior Dashboard</title>
 <style>
-  :root { --bg:#0b1020; --card:#151c33; --line:#243049; --fg:#e8edff; --mut:#8a97bd;
-    --accent:#4ea1ff; --warn:#ffb454; --bad:#ff6b6b; }
+  :root {
+    --bg:#070b18; --bg2:#0d1430; --card:#121a33; --card2:#0f1730; --line:#26314f;
+    --fg:#eaf0ff; --mut:#93a0c6;
+    --bronze:#e0913e; --cyan:#37d6e6; --gold:#ffd24a; --red:#ff6b81; --blue:#5aa6ff;
+    --pink:#ff79c6; --purple:#b08cff; --teal:#2dd4bf; --green:#4ade80;
+  }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg);
-    font:15px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
-  .wrap { max-width:1100px; margin:0 auto; padding:32px 20px 64px; }
-  h1 { margin:0 0 4px; font-size:26px; letter-spacing:.2px; }
-  .sub { color:var(--mut); margin-bottom:8px; }
-  .flow { color:var(--mut); font-size:13px; margin:14px 0 26px; }
-  .flow b { color:var(--accent); }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; }
-  .kpi { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
-  .kpi-val { font-size:26px; font-weight:700; }
-  .kpi-label { color:var(--mut); font-size:13px; margin-top:2px; }
-  .kpi-sub { color:var(--mut); font-size:11px; margin-top:6px; opacity:.8; }
+  html { scroll-behavior:smooth; }
+  body { margin:0; color:var(--fg); position:relative; min-height:100vh;
+    font:15px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    background:
+      radial-gradient(900px 500px at 12% -8%, rgba(58,123,213,.18), transparent 60%),
+      radial-gradient(800px 500px at 100% 0%, rgba(45,212,191,.12), transparent 55%),
+      radial-gradient(700px 600px at 80% 100%, rgba(176,140,255,.10), transparent 55%),
+      linear-gradient(180deg, var(--bg2), var(--bg)); }
+  .ship { position:fixed; inset:0; width:100%; height:100%; z-index:0; pointer-events:none;
+    display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  .ship svg { width:min(1100px,95vw); opacity:.07; }
+  .wrap { position:relative; z-index:1; max-width:1120px; margin:0 auto; padding:34px 20px 70px; }
+  header { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  h1 { margin:0; font-size:28px; letter-spacing:.2px;
+    background:linear-gradient(90deg,#7fd3ff,#37d6e6,#2dd4bf); -webkit-background-clip:text;
+    background-clip:text; color:transparent; }
+  .live { display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--mut);
+    border:1px solid var(--line); border-radius:999px; padding:4px 10px; background:rgba(20,28,52,.6); }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--green);
+    box-shadow:0 0 0 0 rgba(74,222,128,.7); animation:pulse 1.8s infinite; }
+  @keyframes pulse { 70%{ box-shadow:0 0 0 9px rgba(74,222,128,0);} 100%{ box-shadow:0 0 0 0 rgba(74,222,128,0);} }
+  .subtitle { color:var(--mut); width:100%; margin-top:2px; }
   section { margin-top:30px; }
-  h2 { font-size:16px; margin:0 0 12px; color:var(--fg); }
-  .panel { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .intro { background:linear-gradient(180deg,rgba(20,28,52,.7),rgba(15,23,48,.55));
+    border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+  .intro p { margin:6px 0 0; color:#cdd7f5; }
+  h2 { font-size:17px; margin:0 0 4px; display:flex; align-items:center; gap:8px; }
+  h2::before { content:""; width:10px; height:20px; border-radius:3px; background:var(--blue); }
+  h2.acc-bronze::before{background:var(--bronze);} h2.acc-cyan::before{background:var(--cyan);}
+  h2.acc-gold::before{background:var(--gold);} h2.acc-red::before{background:var(--red);}
+  h2.acc-pink::before{background:var(--pink);} h2.acc-teal::before{background:var(--teal);}
+  h2.acc-blue::before{background:var(--blue);}
+  h3 { font-size:14px; margin:0 0 8px; color:var(--fg); }
+  .sec-desc { color:var(--mut); margin:0 0 14px; font-size:13.5px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:14px; }
+  .kpi { position:relative; background:linear-gradient(180deg,var(--card),var(--card2));
+    border:1px solid var(--line); border-radius:14px; padding:18px 16px; overflow:hidden;
+    transition:transform .15s ease, box-shadow .15s ease; }
+  .kpi::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--blue); }
+  .kpi:hover { transform:translateY(-3px); box-shadow:0 10px 30px rgba(0,0,0,.35); }
+  .kpi-val { font-size:30px; font-weight:800; letter-spacing:.5px; }
+  .kpi-label { color:#dbe4ff; font-size:13px; margin-top:3px; font-weight:600; }
+  .kpi-sub { color:var(--mut); font-size:11px; margin-top:6px; }
+  .kpi-bronze::before{background:var(--bronze);} .kpi-bronze .kpi-val{color:var(--bronze);}
+  .kpi-cyan::before{background:var(--cyan);} .kpi-cyan .kpi-val{color:var(--cyan);}
+  .kpi-red::before{background:var(--red);} .kpi-red .kpi-val{color:var(--red);}
+  .kpi-blue::before{background:var(--blue);} .kpi-blue .kpi-val{color:var(--blue);}
+  .kpi-pink::before{background:var(--pink);} .kpi-pink .kpi-val{color:var(--pink);}
+  .kpi-purple::before{background:var(--purple);} .kpi-purple .kpi-val{color:var(--purple);}
+  .kpi-teal::before{background:var(--teal);} .kpi-teal .kpi-val{color:var(--teal);}
+  .kpi-green::before{background:var(--green);} .kpi-green .kpi-val{color:var(--green);}
+  .kpi-gold::before{background:var(--gold);} .kpi-gold .kpi-val{color:var(--gold);}
+  .info, .ipill { width:20px; height:20px; border-radius:50%; border:1px solid var(--line);
+    background:rgba(90,166,255,.12); color:var(--blue); font:700 12px/18px Georgia,serif;
+    text-align:center; cursor:help; }
+  .info { position:absolute; top:10px; right:10px; }
+  .ipill { display:inline-block; }
+  .panel { background:linear-gradient(180deg,rgba(18,26,51,.85),rgba(15,23,48,.7));
+    border:1px solid var(--line); border-radius:14px; padding:18px; margin-top:14px; }
   .two { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  @media (max-width:720px) { .two { grid-template-columns:1fr; } }
+  .panel, .two > div { background:linear-gradient(180deg,rgba(18,26,51,.85),rgba(15,23,48,.7));
+    border:1px solid var(--line); border-radius:14px; padding:16px; }
+  @media (max-width:720px){ .two{ grid-template-columns:1fr; } }
+  .table-wrap { overflow-x:auto; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
-  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
-  th { color:var(--mut); font-weight:600; }
+  th,td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--mut); font-weight:600; cursor:pointer; user-select:none; position:relative; }
+  .sortable th:hover { color:var(--fg); }
+  th .sort { margin-left:6px; opacity:.5; font-size:10px; }
   td:last-child, th:last-child { text-align:right; }
-  .bars { display:flex; flex-direction:column; gap:8px; }
-  .bar-row { display:grid; grid-template-columns:130px 1fr 44px; align-items:center; gap:10px; }
-  .bar-label { color:var(--mut); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .bar-track { background:#0d142a; border-radius:6px; height:10px; overflow:hidden; }
-  .bar-fill { display:block; height:100%; background:linear-gradient(90deg,#3a7bd5,#4ea1ff); }
-  .bar-num { text-align:right; font-variant-numeric:tabular-nums; color:var(--fg); font-size:12px; }
+  tbody tr:hover { background:rgba(90,166,255,.06); }
+  .filter { width:100%; max-width:280px; margin-bottom:10px; padding:8px 11px; border-radius:9px;
+    border:1px solid var(--line); background:#0c1430; color:var(--fg); font-size:13px; }
+  .bars { display:flex; flex-direction:column; gap:9px; }
+  .bar-row { display:grid; grid-template-columns:120px 1fr 46px; align-items:center; gap:10px; }
+  .bar-label { color:var(--mut); font-size:12px; overflow:hidden; text-overflow:ellipsis; }
+  .bar-track { background:#0b1230; border-radius:6px; height:11px; overflow:hidden; }
+  .bar-fill { display:block; height:100%; width:0; transition:width 1s ease; }
+  .bar-cyan { background:linear-gradient(90deg,#1f8fb5,#37d6e6); }
+  .bar-teal { background:linear-gradient(90deg,#0f9b8e,#2dd4bf); }
+  .bar-num { text-align:right; font-variant-numeric:tabular-nums; font-size:12px; }
+  .chart { width:100%; overflow-x:auto; margin:6px 0 14px; }
+  .hint, .disclaimer { color:var(--mut); font-size:12px; margin:8px 0 0; }
+  .disclaimer { border-left:3px solid var(--gold); padding:8px 12px; background:rgba(255,210,74,.06);
+    border-radius:0 8px 8px 0; margin-top:12px; }
   .empty { color:var(--mut); font-style:italic; }
-  .note { color:var(--mut); font-size:12px; margin-top:10px; }
+  .tag { font-size:11px; padding:1px 8px; border-radius:999px; font-weight:700; }
+  .t-bronze{ background:rgba(224,145,62,.18); color:var(--bronze); }
+  .t-cyan{ background:rgba(55,214,230,.16); color:var(--cyan); }
+  .t-gold{ background:rgba(255,210,74,.16); color:var(--gold); }
+  .gloss-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width:720px){ .gloss-grid{ grid-template-columns:1fr; } }
+  .gloss { background:rgba(18,26,51,.7); border:1px solid var(--line); border-radius:10px; padding:10px 14px; }
+  .gloss summary { cursor:pointer; font-weight:600; color:#dbe4ff; }
+  .gloss p { margin:8px 0 0; color:var(--mut); font-size:13px; }
   footer { color:var(--mut); font-size:12px; margin-top:34px; border-top:1px solid var(--line); padding-top:14px; }
-  a { color:var(--accent); }
-</style></head>
-<body><div class="wrap">
-  <h1>AISLakehouse — Maritime Behavior Dashboard</h1>
-  <div class="sub">Real-time AIS lakehouse · Singapore Strait · dark-vessel analytics</div>
-  <div class="flow"><b>AISStream</b> → consumer → <b>Event Hubs</b> → <b>bronze</b> → <b>silver</b>
-    (clean · dedup · enrich · DQ) → <b>gold</b> (dark events)</div>
+  a { color:var(--cyan); }
+  #tooltip { position:fixed; z-index:50; max-width:260px; background:#0b1330; color:var(--fg);
+    border:1px solid var(--line); border-radius:10px; padding:9px 12px; font-size:12.5px;
+    box-shadow:0 12px 30px rgba(0,0,0,.5); pointer-events:none; opacity:0; transition:opacity .12s; }
+</style></head><body>
 
-  <div class="grid"><div class="kpi"><div class="kpi-val">732</div><div class="kpi-label">Bronze (raw)</div><div class="kpi-sub">immutable AIS records</div></div><div class="kpi"><div class="kpi-val">638</div><div class="kpi-label">Silver positions</div><div class="kpi-sub">clean · deduped · enriched</div></div><div class="kpi"><div class="kpi-val">0.93%</div><div class="kpi-label">Quarantine rate</div><div class="kpi-sub">6 flagged</div></div><div class="kpi"><div class="kpi-val">88</div><div class="kpi-label">Ship static</div><div class="kpi-sub">normalized destinations</div></div><div class="kpi"><div class="kpi-val">57</div><div class="kpi-label">Dark events</div><div class="kpi-sub">51 vessels</div></div><div class="kpi"><div class="kpi-val">0.983</div><div class="kpi-label">Avg confidence</div><div class="kpi-sub">dark-event score</div></div></div>
+<div class="ship" aria-hidden="true"><svg viewBox="0 0 1000 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs><linearGradient id="hull" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#7fd3ff"/><stop offset="1" stop-color="#2dd4bf"/></linearGradient></defs>
+  <!-- containers -->
+  <g fill="url(#hull)">
+    <rect x="180" y="150" width="70" height="46" rx="4"/><rect x="256" y="150" width="70" height="46" rx="4"/>
+    <rect x="332" y="150" width="70" height="46" rx="4"/><rect x="408" y="150" width="70" height="46" rx="4"/>
+    <rect x="484" y="150" width="70" height="46" rx="4"/><rect x="560" y="150" width="70" height="46" rx="4"/>
+    <rect x="218" y="116" width="70" height="40" rx="4"/><rect x="294" y="116" width="70" height="40" rx="4"/>
+    <rect x="370" y="116" width="70" height="40" rx="4"/><rect x="446" y="116" width="70" height="40" rx="4"/>
+    <rect x="522" y="116" width="70" height="40" rx="4"/>
+    <rect x="294" y="86" width="70" height="34" rx="4"/><rect x="370" y="86" width="70" height="34" rx="4"/>
+    <rect x="446" y="86" width="70" height="34" rx="4"/>
+  </g>
+  <!-- bridge + funnel -->
+  <rect x="650" y="92" width="80" height="104" rx="6" fill="url(#hull)"/>
+  <rect x="676" y="60" width="30" height="40" rx="5" fill="url(#hull)"/>
+  <!-- hull -->
+  <path d="M120 196 H792 L740 270 H190 Z" fill="url(#hull)"/>
+  <path d="M792 196 H862 L800 256 L740 256 Z" fill="url(#hull)"/>
+  <!-- waterline waves -->
+  <g stroke="#5aa6ff" stroke-width="3" opacity=".8" fill="none">
+    <path d="M60 292 q30 -16 60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0"/>
+    <path d="M40 312 q30 -16 60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0" opacity=".5"/>
+  </g>
+</svg></div>
+<div class="wrap">
+<header>
+  <h1>AISLakehouse</h1>
+  <span class="live"><span class="dot"></span> 24/7 ingestion live</span>
+  <div class="subtitle">Real-time maritime <b>behaviour</b> analytics · Singapore Strait ·
+    dark-vessel detection &amp; commodity signals</div>
+</header>
+<section class="intro"><h2 class="acc-blue">How to read this dashboard</h2><p>This project watches ships near the <b>Singapore Strait</b> — one of the world's busiest shipping lanes — in real time, and looks for <b>unusual behaviour</b> rather than just plotting dots on a map. Raw radio messages flow through three refinement stages (<span class="tag t-bronze">Bronze</span> → <span class="tag t-cyan">Silver</span> → <span class="tag t-gold">Gold</span>) and end as the analytics below. Hover the <span class="ipill">i</span> on any card for a plain-English explanation, and see the <a href="#glossary-anchor">glossary</a> for terms.</p></section><div class="grid"><div class="kpi kpi-bronze"><button class="info" data-tip="Every raw AIS message exactly as received — the untouched source of truth before any cleaning. Nothing is ever edited here." aria-label="What is this?">i</button><div class="kpi-val"><span class="num" data-to="732.0" data-dec="0" data-suffix="">732</span></div><div class="kpi-label">Bronze (raw)</div><div class="kpi-sub">immutable AIS records</div></div><div class="kpi kpi-cyan"><button class="info" data-tip="Ship position reports after cleaning, removing duplicates and adding the country (flag) of each ship. This is the analysis-ready dataset." aria-label="What is this?">i</button><div class="kpi-val"><span class="num" data-to="638.0" data-dec="0" data-suffix="">638</span></div><div class="kpi-label">Silver positions</div><div class="kpi-sub">clean · de-duplicated · enriched</div></div><div class="kpi kpi-red"><button class="info" data-tip="Share of position reports rejected by data-quality checks — bad coordinates, impossible speeds, missing IDs. Lower is better." aria-label="What is this?">i</button><div class="kpi-val"><span class="num" data-to="0.9299999999999999" data-dec="2" data-suffix="%">0.93%</span></div><div class="kpi-label">Quarantine rate</div><div class="kpi-sub">6 flagged</div></div><div class="kpi kpi-blue"><button class="info" data-tip="Vessel identity records (name, type, declared destination) — the &#x27;who and what&#x27; of each ship, with messy destination text cleaned to standard ports." aria-label="What is this?">i</button><div class="kpi-val"><span class="num" data-to="88.0" data-dec="0" data-suffix="">88</span></div><div class="kpi-label">Ship profiles</div><div class="kpi-sub">normalized destinations</div></div><div class="kpi kpi-pink"><button class="info" data-tip="Times a ship stopped broadcasting for an unusually long gap and then reappeared. Could be a coverage gap or a vessel going dark." aria-label="What is this?">i</button><div class="kpi-val"><span class="num" data-to="57.0" data-dec="0" data-suffix="">57</span></div><div class="kpi-label">Dark events</div><div class="kpi-sub">51 vessels</div></div><div class="kpi kpi-purple"><button class="info" data-tip="On average, how anomalous the detected dark events are versus each ship&#x27;s normal reporting rhythm (0 = routine, 1 = highly unusual)." aria-label="What is this?">i</button><div class="kpi-val"><span class="num" data-to="0.983" data-dec="3" data-suffix="">0.983</span></div><div class="kpi-label">Avg confidence</div><div class="kpi-sub">dark-event anomaly score</div></div></div><section><h2 class="acc-teal">🛢️ Commodity indicators — tanker flow &amp; floating storage</h2><p class="sec-desc">Reading ship movements as an early signal of oil &amp; gas activity.</p><div class="grid"><div class="kpi kpi-teal"><button class="info" data-tip="Vessels identified as tankers from their AIS ship-type code (80–89). These carry crude oil, refined products, gas or chemicals." aria-label="What is this?">i</button><div class="kpi-val"><span class="num" data-to="21.0" data-dec="0" data-suffix="">21</span></div><div class="kpi-label">Tankers</div><div class="kpi-sub">oil / gas / chemical carriers</div></div><div class="kpi kpi-green"><button class="info" data-tip="What fraction of ships in the strait are tankers. A rough gauge of oil &amp; gas traffic." aria-label="What is this?">i</button><div class="kpi-val"><span class="num" data-to="5.3" data-dec="1" data-suffix="%">5.3%</span></div><div class="kpi-label">Tanker share</div><div class="kpi-sub">of all vessels (avg per hour)</div></div><div class="kpi kpi-gold"><button class="info" data-tip="Tankers sitting nearly still in one small area for a long time — they may be storing cargo offshore, which often signals oversupply (a bearish crude signal)." aria-label="What is this?">i</button><div class="kpi-val"><span class="num" data-to="0.0" data-dec="0" data-suffix="">0</span></div><div class="kpi-label">Floating storage</div><div class="kpi-sub">idle-tanker candidates</div></div></div><div class="panel"><h3>Hourly tanker flow</h3><p class="hint">Bars show all vessels (faint) vs tankers (teal) seen each hour. Hover a bar for exact counts.</p><div id="flowchart" class="chart"></div><div class="table-wrap"><table id="flowtable" class="data-table sortable"><thead><tr><th data-num="0">Hour (UTC)<span class="sort"></span></th><th data-num="1">Vessels<span class="sort"></span></th><th data-num="1">Tankers<span class="sort"></span></th><th data-num="1">Tanker share<span class="sort"></span></th></tr></thead><tbody><tr><td>06-04 04:00</td><td>123</td><td>11</td><td>0.089</td></tr><tr><td>06-04 03:00</td><td>210</td><td>13</td><td>0.062</td></tr><tr><td>06-04 02:00</td><td>48</td><td>4</td><td>0.083</td></tr><tr><td>06-03 05:00</td><td>35</td><td>0</td><td>0.0</td></tr><tr><td>06-03 03:00</td><td>67</td><td>2</td><td>0.03</td></tr></tbody></table></div><p class="disclaimer"><b>Indicator, not a price predictor.</b> Tanker throughput and floating storage are <i>inputs</i> commodity desks use — but one chokepoint and a short history make this illustrative, not market-grade. Real forecasting needs price history, global coverage and a backtested model.</p></div></section><section><h2 class="acc-pink">🛰️ Dark-vessel events (highest confidence first)</h2><p class="sec-desc">Ships that went silent, then reappeared. Sort by any column; filter by typing.</p><input class="filter" data-target="darktable" placeholder="Filter rows…" aria-label="Filter"><div class="table-wrap"><table id="darktable" class="data-table sortable"><thead><tr><th data-num="0">MMSI<span class="sort"></span></th><th data-num="0">Flag<span class="sort"></span></th><th data-num="0">Dark start<span class="sort"></span></th><th data-num="0">Dark end<span class="sort"></span></th><th data-num="1">Gap (min)<span class="sort"></span></th><th data-num="1">Confidence<span class="sort"></span></th></tr></thead><tbody><tr><td>563273100</td><td>Singapore</td><td>2026-06-03 03:42</td><td>2026-06-04 04:00</td><td>1458.2</td><td>1.0</td></tr><tr><td>563062800</td><td>Singapore</td><td>2026-06-03 03:42</td><td>2026-06-04 04:00</td><td>1458.2</td><td>1.0</td></tr><tr><td>566496000</td><td>Singapore</td><td>2026-06-03 03:41</td><td>2026-06-04 03:59</td><td>1458.2</td><td>1.0</td></tr><tr><td>357225000</td><td>Panama</td><td>2026-06-03 03:41</td><td>2026-06-04 03:58</td><td>1457.4</td><td>1.0</td></tr><tr><td>563013850</td><td>Singapore</td><td>2026-06-03 03:41</td><td>2026-06-04 03:58</td><td>1456.9</td><td>1.0</td></tr><tr><td>355929000</td><td>Panama</td><td>2026-06-03 03:41</td><td>2026-06-04 03:58</td><td>1456.8</td><td>1.0</td></tr><tr><td>215173000</td><td>Malta</td><td>2026-06-03 03:41</td><td>2026-06-04 03:57</td><td>1456.6</td><td>1.0</td></tr><tr><td>563874000</td><td>Singapore</td><td>2026-06-03 03:41</td><td>2026-06-04 03:57</td><td>1456.3</td><td>1.0</td></tr><tr><td>563215500</td><td>Singapore</td><td>2026-06-03 03:42</td><td>2026-06-04 03:58</td><td>1456.2</td><td>1.0</td></tr><tr><td>566052000</td><td>Singapore</td><td>2026-06-03 03:42</td><td>2026-06-04 03:58</td><td>1455.9</td><td>1.0</td></tr><tr><td>564654000</td><td>Singapore</td><td>2026-06-03 03:41</td><td>2026-06-04 03:56</td><td>1455.5</td><td>1.0</td></tr><tr><td>566096000</td><td>Singapore</td><td>2026-06-03 03:42</td><td>2026-06-04 03:58</td><td>1455.4</td><td>1.0</td></tr></tbody></table></div><p class="hint">Longest silence: 1458.2 min. Terrestrial AIS has real coverage dead zones, so a dark event is a <i>candidate</i> signal, not proof of intent.</p></section><section><h2 class="acc-cyan">🌍 Where ships come from &amp; go</h2><p class="sec-desc">Registration country (from the MMSI) and declared destination (normalized from messy hand-typed text like &#x27;AE DXB&#x27; → &#x27;DUBAI&#x27;).</p><div class="two"><div><h3>Flag states (where ships are registered)</h3><div class="bars"><div class="bar-row"><span class="bar-label">Singapore</span><span class="bar-track"><span class="bar-fill bar-cyan" style="width:100.0%"></span></span><span class="bar-num">391</span></div><div class="bar-row"><span class="bar-label">Panama</span><span class="bar-track"><span class="bar-fill bar-cyan" style="width:11.5%"></span></span><span class="bar-num">45</span></div><div class="bar-row"><span class="bar-label">Liberia</span><span class="bar-track"><span class="bar-fill bar-cyan" style="width:8.7%"></span></span><span class="bar-num">34</span></div><div class="bar-row"><span class="bar-label">Marshall Islands</span><span class="bar-track"><span class="bar-fill bar-cyan" style="width:7.7%"></span></span><span class="bar-num">30</span></div><div class="bar-row"><span class="bar-label">Indonesia</span><span class="bar-track"><span class="bar-fill bar-cyan" style="width:5.6%"></span></span><span class="bar-num">22</span></div><div class="bar-row"><span class="bar-label">Unknown</span><span class="bar-track"><span class="bar-fill bar-cyan" style="width:5.1%"></span></span><span class="bar-num">20</span></div><div class="bar-row"><span class="bar-label">Malta</span><span class="bar-track"><span class="bar-fill bar-cyan" style="width:4.6%"></span></span><span class="bar-num">18</span></div><div class="bar-row"><span class="bar-label">China</span><span class="bar-track"><span class="bar-fill bar-cyan" style="width:4.1%"></span></span><span class="bar-num">16</span></div><div class="bar-row"><span class="bar-label">Hong Kong</span><span class="bar-track"><span class="bar-fill bar-cyan" style="width:3.1%"></span></span><span class="bar-num">12</span></div><div class="bar-row"><span class="bar-label">Bahamas</span><span class="bar-track"><span class="bar-fill bar-cyan" style="width:3.1%"></span></span><span class="bar-num">12</span></div></div></div><div><h3>Top destinations (cleaned from free-text)</h3><div class="bars"><div class="bar-row"><span class="bar-label">SINGAPORE</span><span class="bar-track"><span class="bar-fill bar-teal" style="width:100.0%"></span></span><span class="bar-num">17</span></div><div class="bar-row"><span class="bar-label">SGSIN PEBGA</span><span class="bar-track"><span class="bar-fill bar-teal" style="width:35.3%"></span></span><span class="bar-num">6</span></div><div class="bar-row"><span class="bar-label">SG SIN PEBGC</span><span class="bar-track"><span class="bar-fill bar-teal" style="width:11.8%"></span></span><span class="bar-num">2</span></div><div class="bar-row"><span class="bar-label">PEBGB</span><span class="bar-track"><span class="bar-fill bar-teal" style="width:11.8%"></span></span><span class="bar-num">2</span></div><div class="bar-row"><span class="bar-label">SG PGBG</span><span class="bar-track"><span class="bar-fill bar-teal" style="width:11.8%"></span></span><span class="bar-num">2</span></div><div class="bar-row"><span class="bar-label">PEBGC SINGAPORE</span><span class="bar-track"><span class="bar-fill bar-teal" style="width:11.8%"></span></span><span class="bar-num">2</span></div><div class="bar-row"><span class="bar-label">ASPP</span><span class="bar-track"><span class="bar-fill bar-teal" style="width:11.8%"></span></span><span class="bar-num">2</span></div><div class="bar-row"><span class="bar-label">BC TERMINAL</span><span class="bar-track"><span class="bar-fill bar-teal" style="width:11.8%"></span></span><span class="bar-num">2</span></div><div class="bar-row"><span class="bar-label">ARP</span><span class="bar-track"><span class="bar-fill bar-teal" style="width:11.8%"></span></span><span class="bar-num">2</span></div><div class="bar-row"><span class="bar-label">ASSPU</span><span class="bar-track"><span class="bar-fill bar-teal" style="width:5.9%"></span></span><span class="bar-num">1</span></div></div></div></div></section><section><h2 class="acc-red">🧪 Data-quality quarantine</h2><p class="sec-desc">Records caught by automated checks and set aside (not deleted), each with a reason code.</p><div class="table-wrap"><table id="quartable" class="data-table sortable"><thead><tr><th data-num="0">Reason code<span class="sort"></span></th><th data-num="1">Count<span class="sort"></span></th></tr></thead><tbody><tr><td>INVALID_MMSI</td><td>6</td></tr></tbody></table></div></section><a id="glossary-anchor"></a><section><h2 class="acc-blue">📖 Glossary — plain-English definitions</h2><p class="sec-desc">New to ship tracking? Expand any term.</p><div class="gloss-grid"><details class='gloss'><summary>AIS (Automatic Identification System)</summary><p>A radio system ships broadcast to announce their identity, position, speed and heading — like an aircraft transponder, but for vessels.</p></details><details class='gloss'><summary>MMSI</summary><p>A ship&#x27;s 9-digit radio ID. The first 3 digits (the MID) reveal the country the ship is registered under (its flag state).</p></details><details class='gloss'><summary>SOG (Speed Over Ground)</summary><p>How fast the vessel is actually moving across the water, in knots.</p></details><details class='gloss'><summary>Bronze / Silver / Gold (Medallion architecture)</summary><p>Three refinement layers. Bronze = raw data exactly as received. Silver = cleaned, de-duplicated and enriched. Gold = business-ready analytics.</p></details><details class='gloss'><summary>De-duplication &amp; watermarking</summary><p>Ships repeat messages and they arrive out of order. We drop duplicate (ship, time) records and use a time &#x27;watermark&#x27; to handle late-arriving data correctly.</p></details><details class='gloss'><summary>Quarantine</summary><p>Records that fail automated quality checks (impossible coordinates, absurd speed) are set aside with a reason code instead of being silently deleted.</p></details><details class='gloss'><summary>Dark vessel / dark event</summary><p>When a ship stops broadcasting AIS for an unusually long time and then reappears. It can be an innocent coverage gap — or a vessel deliberately &#x27;going dark&#x27;.</p></details><details class='gloss'><summary>Confidence score</summary><p>How unusual a dark event is compared with that ship&#x27;s own normal reporting rhythm, from 0 (routine) to 1 (highly anomalous).</p></details><details class='gloss'><summary>Tanker (ship type 80–89)</summary><p>AIS classifies ships by a type code; 80–89 are tankers carrying oil, gas or chemicals.</p></details><details class='gloss'><summary>Floating storage</summary><p>Full tankers anchored offshore acting as temporary storage — a classic sign of oversupply and weak demand.</p></details></div></section><footer>Generated 2026-06-04T04:18:06.630579Z · latest ship event 2026-06-04T04:01:17 · gold computed 2026-06-04T04:03:51.061022<br>Source: <a href="https://github.com/JashwanthReddyE/AISLakehouse">github.com/JashwanthReddyE/AISLakehouse</a> · AISStream → Event Hubs → Databricks (Bronze/Silver/Gold Delta on ADLS Gen2)</footer></div><script type="application/json" id="metrics">{"generated_at": "2026-06-04T04:18:06.630579Z", "commodity": {"distinct_tankers": 21, "floating_storage_candidates": 0, "avg_tanker_share": 0.053, "flow": [{"hour": "06-04 04:00", "vessels": 123, "tankers": 11, "tanker_share": 0.089}, {"hour": "06-04 03:00", "vessels": 210, "tankers": 13, "tanker_share": 0.062}, {"hour": "06-04 02:00", "vessels": 48, "tankers": 4, "tanker_share": 0.083}, {"hour": "06-03 05:00", "vessels": 35, "tankers": 0, "tanker_share": 0.0}, {"hour": "06-03 03:00", "vessels": 67, "tankers": 2, "tanker_share": 0.03}], "floating_storage_top": [{"mmsi": 563221200, "flag_country": "Singapore", "span_hours": 0.0, "spread_nm": 0.0, "avg_sog": 0.2, "n_points": 1, "is_floating_storage": false}, {"mmsi": 563127800, "flag_country": "Singapore", "span_hours": 0.0, "spread_nm": 0.0, "avg_sog": 0.0, "n_points": 1, "is_floating_storage": false}, {"mmsi": 354536000, "flag_country": "Panama", "span_hours": 0.0, "spread_nm": 0.0, "avg_sog": 10.4, "n_points": 1, "is_floating_storage": false}, {"mmsi": 565459000, "flag_country": "Singapore", "span_hours": 0.0, "spread_nm": 0.0, "avg_sog": 0.1, "n_points": 1, "is_floating_storage": false}, {"mmsi": 525121099, "flag_country": "Indonesia", "span_hours": 0.0, "spread_nm": 0.0, "avg_sog": 0.0, "n_points": 1, "is_floating_storage": false}, {"mmsi": 477129100, "flag_country": "Hong Kong", "span_hours": 0.0, "spread_nm": 0.0, "avg_sog": 0.1, "n_points": 1, "is_floating_storage": false}, {"mmsi": 256627000, "flag_country": "Malta", "span_hours": 0.0, "spread_nm": 0.0, "avg_sog": 0.0, "n_points": 1, "is_floating_storage": false}, {"mmsi": 525008095, "flag_country": "Indonesia", "span_hours": 0.0, "spread_nm": 0.0, "avg_sog": 0.0, "n_points": 1, "is_floating_storage": false}, {"mmsi": 636025284, "flag_country": "Liberia", "span_hours": 0.0, "spread_nm": 0.0, "avg_sog": 0.0, "n_points": 1, "is_floating_storage": false}, {"mmsi": 477172200, "flag_country": "Hong Kong", "span_hours": 0.0, "spread_nm": 0.0, "avg_sog": 13.0, "n_points": 1, "is_floating_storage": false}]}, "layers": {"bronze": 732, "silver_positions": 638, "silver_quarantine": 6, "silver_ship_static": 88, "gold_dark_events": 57}, "quarantine_rate": 0.0093, "quarantine_reasons": [{"reason_code": "INVALID_MMSI", "count": 6}], "dark_events": {"count": 57, "vessels": 51, "avg_confidence": 0.983, "max_gap_minutes": 1458.2}, "top_dark_events": [{"mmsi": 563273100, "flag_country": "Singapore", "dark_start": "2026-06-03 03:42", "dark_end": "2026-06-04 04:00", "gap_minutes": 1458.2, "confidence": 1.0}, {"mmsi": 563062800, "flag_country": "Singapore", "dark_start": "2026-06-03 03:42", "dark_end": "2026-06-04 04:00", "gap_minutes": 1458.2, "confidence": 1.0}, {"mmsi": 566496000, "flag_country": "Singapore", "dark_start": "2026-06-03 03:41", "dark_end": "2026-06-04 03:59", "gap_minutes": 1458.2, "confidence": 1.0}, {"mmsi": 357225000, "flag_country": "Panama", "dark_start": "2026-06-03 03:41", "dark_end": "2026-06-04 03:58", "gap_minutes": 1457.4, "confidence": 1.0}, {"mmsi": 563013850, "flag_country": "Singapore", "dark_start": "2026-06-03 03:41", "dark_end": "2026-06-04 03:58", "gap_minutes": 1456.9, "confidence": 1.0}, {"mmsi": 355929000, "flag_country": "Panama", "dark_start": "2026-06-03 03:41", "dark_end": "2026-06-04 03:58", "gap_minutes": 1456.8, "confidence": 1.0}, {"mmsi": 215173000, "flag_country": "Malta", "dark_start": "2026-06-03 03:41", "dark_end": "2026-06-04 03:57", "gap_minutes": 1456.6, "confidence": 1.0}, {"mmsi": 563874000, "flag_country": "Singapore", "dark_start": "2026-06-03 03:41", "dark_end": "2026-06-04 03:57", "gap_minutes": 1456.3, "confidence": 1.0}, {"mmsi": 563215500, "flag_country": "Singapore", "dark_start": "2026-06-03 03:42", "dark_end": "2026-06-04 03:58", "gap_minutes": 1456.2, "confidence": 1.0}, {"mmsi": 566052000, "flag_country": "Singapore", "dark_start": "2026-06-03 03:42", "dark_end": "2026-06-04 03:58", "gap_minutes": 1455.9, "confidence": 1.0}, {"mmsi": 564654000, "flag_country": "Singapore", "dark_start": "2026-06-03 03:41", "dark_end": "2026-06-04 03:56", "gap_minutes": 1455.5, "confidence": 1.0}, {"mmsi": 566096000, "flag_country": "Singapore", "dark_start": "2026-06-03 03:42", "dark_end": "2026-06-04 03:58", "gap_minutes": 1455.4, "confidence": 1.0}], "top_flags": [{"flag_country": "Singapore", "count": 391}, {"flag_country": "Panama", "count": 45}, {"flag_country": "Liberia", "count": 34}, {"flag_country": "Marshall Islands", "count": 30}, {"flag_country": "Indonesia", "count": 22}, {"flag_country": "Unknown", "count": 20}, {"flag_country": "Malta", "count": 18}, {"flag_country": "China", "count": 16}, {"flag_country": "Hong Kong", "count": 12}, {"flag_country": "Bahamas", "count": 12}], "top_destinations": [{"destination": "SINGAPORE", "count": 17}, {"destination": "SGSIN PEBGA", "count": 6}, {"destination": "SG SIN PEBGC", "count": 2}, {"destination": "PEBGB", "count": 2}, {"destination": "SG PGBG", "count": 2}, {"destination": "PEBGC SINGAPORE", "count": 2}, {"destination": "ASPP", "count": 2}, {"destination": "BC TERMINAL", "count": 2}, {"destination": "ARP", "count": 2}, {"destination": "ASSPU", "count": 1}], "freshness": {"latest_event_time": "2026-06-04T04:01:17", "latest_bronze_ingest": "2026-06-04T04:01:19.681000", "latest_silver_processed": "2026-06-04T04:02:12.341000", "latest_gold_computed": "2026-06-04T04:03:51.061022"}}</script>
+<script>
+const METRICS = JSON.parse(document.getElementById('metrics').textContent);
 
-  <section><h2>Commodity indicators — tanker flow &amp; floating storage</h2><div class="grid"><div class="kpi"><div class="kpi-val">21</div><div class="kpi-label">Tankers</div><div class="kpi-sub">AIS type 80-89</div></div><div class="kpi"><div class="kpi-val">5.3%</div><div class="kpi-label">Tanker share</div><div class="kpi-sub">of vessels (avg/hr)</div></div><div class="kpi"><div class="kpi-val">0</div><div class="kpi-label">Floating storage</div><div class="kpi-sub">idle-tanker candidates</div></div></div><div class="panel" style="margin-top:14px"><table><thead><tr><th>Hour (UTC)</th><th>Vessels</th><th>Tankers</th><th>Tanker share</th></tr></thead><tbody><tr><td>06-04 04:00</td><td>123</td><td>11</td><td>0.089</td></tr><tr><td>06-04 03:00</td><td>210</td><td>13</td><td>0.062</td></tr><tr><td>06-04 02:00</td><td>48</td><td>4</td><td>0.083</td></tr><tr><td>06-03 05:00</td><td>35</td><td>0</td><td>0.0</td></tr><tr><td>06-03 03:00</td><td>67</td><td>2</td><td>0.03</td></tr></tbody></table><div class="note"><b>Indicator, not a price predictor.</b> Tanker throughput and floating storage (idle tankers) are established inputs to crude/gas analysis. A single chokepoint and short history make this illustrative, not market-grade.</div></div></section>
+/* Animated counters */
+function animate(el){
+  const to=parseFloat(el.dataset.to||'0'), dec=parseInt(el.dataset.dec||'0'), suf=el.dataset.suffix||'';
+  const dur=900, t0=performance.now();
+  function fmt(v){ return (dec===0 ? Math.round(v).toLocaleString() : v.toFixed(dec)) + suf; }
+  function step(t){ let p=Math.min(1,(t-t0)/dur); p=1-Math.pow(1-p,3);
+    el.textContent=fmt(to*p); if(p<1) requestAnimationFrame(step); else el.textContent=fmt(to); }
+  requestAnimationFrame(step);
+}
+const io=new IntersectionObserver((es)=>es.forEach(e=>{ if(e.isIntersecting){ animate(e.target); io.unobserve(e.target);} }));
+document.querySelectorAll('.num').forEach(n=>io.observe(n));
+/* animate bar fills */
+new IntersectionObserver((es)=>es.forEach(e=>{ if(e.isIntersecting){ const f=e.target; f.style.width=f.dataset.w||f.style.width; } })
+);
+document.querySelectorAll('.bar-fill').forEach(f=>{ const w=f.style.width; f.dataset.w=w; f.style.width='0';
+  new IntersectionObserver((es,o)=>es.forEach(e=>{ if(e.isIntersecting){ f.style.width=w; o.disconnect(); } })).observe(f); });
 
-  <section><h2>Dark-vessel events (highest confidence)</h2>
-    <div class="panel"><table><thead><tr><th>MMSI</th><th>Flag</th><th>Dark start</th><th>Dark end</th><th>Gap (min)</th><th>Confidence</th></tr></thead><tbody><tr><td>563273100</td><td>Singapore</td><td>2026-06-03 03:42</td><td>2026-06-04 04:00</td><td>1458.2</td><td>1.0</td></tr><tr><td>563062800</td><td>Singapore</td><td>2026-06-03 03:42</td><td>2026-06-04 04:00</td><td>1458.2</td><td>1.0</td></tr><tr><td>566496000</td><td>Singapore</td><td>2026-06-03 03:41</td><td>2026-06-04 03:59</td><td>1458.2</td><td>1.0</td></tr><tr><td>357225000</td><td>Panama</td><td>2026-06-03 03:41</td><td>2026-06-04 03:58</td><td>1457.4</td><td>1.0</td></tr><tr><td>563013850</td><td>Singapore</td><td>2026-06-03 03:41</td><td>2026-06-04 03:58</td><td>1456.9</td><td>1.0</td></tr><tr><td>355929000</td><td>Panama</td><td>2026-06-03 03:41</td><td>2026-06-04 03:58</td><td>1456.8</td><td>1.0</td></tr><tr><td>215173000</td><td>Malta</td><td>2026-06-03 03:41</td><td>2026-06-04 03:57</td><td>1456.6</td><td>1.0</td></tr><tr><td>563874000</td><td>Singapore</td><td>2026-06-03 03:41</td><td>2026-06-04 03:57</td><td>1456.3</td><td>1.0</td></tr><tr><td>563215500</td><td>Singapore</td><td>2026-06-03 03:42</td><td>2026-06-04 03:58</td><td>1456.2</td><td>1.0</td></tr><tr><td>566052000</td><td>Singapore</td><td>2026-06-03 03:42</td><td>2026-06-04 03:58</td><td>1455.9</td><td>1.0</td></tr><tr><td>564654000</td><td>Singapore</td><td>2026-06-03 03:41</td><td>2026-06-04 03:56</td><td>1455.5</td><td>1.0</td></tr><tr><td>566096000</td><td>Singapore</td><td>2026-06-03 03:42</td><td>2026-06-04 03:58</td><td>1455.4</td><td>1.0</td></tr></tbody></table>
-      <div class="note">Longest silence: 1458.2 min. Caveat: terrestrial AIS has genuine
-      coverage dead zones — a dark event is a candidate signal, not proof of intent.</div>
-    </div>
-  </section>
+/* Tooltip (info pop-overs + chart) */
+const tip=document.createElement('div'); tip.id='tooltip'; document.body.appendChild(tip);
+function showTip(txt,x,y){ tip.textContent=txt; tip.style.opacity='1';
+  tip.style.left=Math.min(x+14, innerWidth-tip.offsetWidth-12)+'px'; tip.style.top=(y+16)+'px'; }
+function hideTip(){ tip.style.opacity='0'; }
+document.querySelectorAll('[data-tip]').forEach(el=>{
+  el.addEventListener('mouseenter',e=>showTip(el.dataset.tip,e.clientX,e.clientY));
+  el.addEventListener('mousemove',e=>showTip(el.dataset.tip,e.clientX,e.clientY));
+  el.addEventListener('mouseleave',hideTip);
+  el.addEventListener('click',e=>showTip(el.dataset.tip,e.clientX,e.clientY));
+});
 
-  <section class="two">
-    <div><h2>Flag states (positions)</h2><div class="panel"><div class="bars"><div class="bar-row"><span class="bar-label">Singapore</span><span class="bar-track"><span class="bar-fill" style="width:100.0%"></span></span><span class="bar-num">391</span></div><div class="bar-row"><span class="bar-label">Panama</span><span class="bar-track"><span class="bar-fill" style="width:11.5%"></span></span><span class="bar-num">45</span></div><div class="bar-row"><span class="bar-label">Liberia</span><span class="bar-track"><span class="bar-fill" style="width:8.7%"></span></span><span class="bar-num">34</span></div><div class="bar-row"><span class="bar-label">Marshall Islands</span><span class="bar-track"><span class="bar-fill" style="width:7.7%"></span></span><span class="bar-num">30</span></div><div class="bar-row"><span class="bar-label">Indonesia</span><span class="bar-track"><span class="bar-fill" style="width:5.6%"></span></span><span class="bar-num">22</span></div><div class="bar-row"><span class="bar-label">Unknown</span><span class="bar-track"><span class="bar-fill" style="width:5.1%"></span></span><span class="bar-num">20</span></div><div class="bar-row"><span class="bar-label">Malta</span><span class="bar-track"><span class="bar-fill" style="width:4.6%"></span></span><span class="bar-num">18</span></div><div class="bar-row"><span class="bar-label">China</span><span class="bar-track"><span class="bar-fill" style="width:4.1%"></span></span><span class="bar-num">16</span></div><div class="bar-row"><span class="bar-label">Hong Kong</span><span class="bar-track"><span class="bar-fill" style="width:3.1%"></span></span><span class="bar-num">12</span></div><div class="bar-row"><span class="bar-label">Bahamas</span><span class="bar-track"><span class="bar-fill" style="width:3.1%"></span></span><span class="bar-num">12</span></div></div></div></div>
-    <div><h2>Top destinations (normalized)</h2><div class="panel"><div class="bars"><div class="bar-row"><span class="bar-label">SINGAPORE</span><span class="bar-track"><span class="bar-fill" style="width:100.0%"></span></span><span class="bar-num">17</span></div><div class="bar-row"><span class="bar-label">SGSIN PEBGA</span><span class="bar-track"><span class="bar-fill" style="width:35.3%"></span></span><span class="bar-num">6</span></div><div class="bar-row"><span class="bar-label">SG SIN PEBGC</span><span class="bar-track"><span class="bar-fill" style="width:11.8%"></span></span><span class="bar-num">2</span></div><div class="bar-row"><span class="bar-label">PEBGB</span><span class="bar-track"><span class="bar-fill" style="width:11.8%"></span></span><span class="bar-num">2</span></div><div class="bar-row"><span class="bar-label">SG PGBG</span><span class="bar-track"><span class="bar-fill" style="width:11.8%"></span></span><span class="bar-num">2</span></div><div class="bar-row"><span class="bar-label">PEBGC SINGAPORE</span><span class="bar-track"><span class="bar-fill" style="width:11.8%"></span></span><span class="bar-num">2</span></div><div class="bar-row"><span class="bar-label">ASPP</span><span class="bar-track"><span class="bar-fill" style="width:11.8%"></span></span><span class="bar-num">2</span></div><div class="bar-row"><span class="bar-label">BC TERMINAL</span><span class="bar-track"><span class="bar-fill" style="width:11.8%"></span></span><span class="bar-num">2</span></div><div class="bar-row"><span class="bar-label">ARP</span><span class="bar-track"><span class="bar-fill" style="width:11.8%"></span></span><span class="bar-num">2</span></div><div class="bar-row"><span class="bar-label">ASSPU</span><span class="bar-track"><span class="bar-fill" style="width:5.9%"></span></span><span class="bar-num">1</span></div></div></div></div>
-  </section>
+/* Sortable tables */
+document.querySelectorAll('table.sortable').forEach(tb=>{
+  tb.querySelectorAll('th').forEach((th,idx)=>{
+    let dir=1;
+    th.addEventListener('click',()=>{
+      const isNum=th.dataset.num==='1';
+      const rows=[...tb.tBodies[0].rows];
+      rows.sort((a,b)=>{ let x=a.cells[idx].textContent.trim(), y=b.cells[idx].textContent.trim();
+        if(isNum){ x=parseFloat(x.replace(/[^0-9.\-]/g,''))||0; y=parseFloat(y.replace(/[^0-9.\-]/g,''))||0; return (x-y)*dir; }
+        return x.localeCompare(y)*dir; });
+      rows.forEach(r=>tb.tBodies[0].appendChild(r));
+      tb.querySelectorAll('.sort').forEach(s=>s.textContent='');
+      th.querySelector('.sort').textContent = dir>0?'▲':'▼'; dir*=-1;
+    });
+  });
+});
 
-  <section><h2>Data-quality quarantine</h2><div class="panel"><table><thead><tr><th>Reason code</th><th>Count</th></tr></thead><tbody><tr><td>INVALID_MMSI</td><td>6</td></tr></tbody></table></div></section>
+/* Filterable tables */
+document.querySelectorAll('.filter').forEach(inp=>{
+  inp.addEventListener('input',()=>{ const q=inp.value.toLowerCase();
+    const tb=document.getElementById(inp.dataset.target);
+    [...tb.tBodies[0].rows].forEach(r=>{ r.style.display = r.textContent.toLowerCase().includes(q)?'':'none'; });
+  });
+});
 
-  <footer>
-    Generated 2026-06-04T04:18:06.630579Z · latest event 2026-06-04T04:01:17 · gold computed 2026-06-04T04:03:51.061022<br>
-    Source: <a href="https://github.com/JashwanthReddyE/AISLakehouse">github.com/JashwanthReddyE/AISLakehouse</a>
-  </footer>
-</div></body></html>
+/* Interactive hourly tanker-flow chart */
+(function(){
+  const c = METRICS.commodity && METRICS.commodity.flow; const host=document.getElementById('flowchart');
+  if(!host || !c || !c.length) { if(host) host.innerHTML='<p class="empty">no flow data yet</p>'; return; }
+  const data=[...c].reverse(); // chronological
+  const W=Math.max(520, data.length*70), H=190, pad=30, bw=Math.min(46,(W-2*pad)/data.length-12);
+  const max=Math.max(...data.map(d=>d.vessels),1);
+  const x=i=>pad+i*((W-2*pad)/data.length)+6;
+  const y=v=>H-pad-(v/max)*(H-2*pad);
+  let svg=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`;
+  svg+=`<line x1="${pad}" y1="${H-pad}" x2="${W-6}" y2="${H-pad}" stroke="#26314f"/>`;
+  data.forEach((d,i)=>{
+    const xv=x(i);
+    svg+=`<rect x="${xv}" y="${y(d.vessels)}" width="${bw}" height="${H-pad-y(d.vessels)}" rx="3" fill="#26406e" class="b" data-l="${d.hour}: ${d.vessels} vessels"/>`;
+    svg+=`<rect x="${xv}" y="${y(d.tankers)}" width="${bw}" height="${H-pad-y(d.tankers)}" rx="3" fill="#2dd4bf" class="b" data-l="${d.hour}: ${d.tankers} tankers (${(d.tanker_share*100).toFixed(1)}% share)"/>`;
+    svg+=`<text x="${xv+bw/2}" y="${H-pad+14}" fill="#93a0c6" font-size="10" text-anchor="middle">${d.hour.slice(-5)}</text>`;
+  });
+  svg+=`</svg>`; host.innerHTML=svg;
+  host.querySelectorAll('.b').forEach(b=>{
+    b.style.cursor='pointer';
+    b.addEventListener('mousemove',e=>showTip(b.dataset.l,e.clientX,e.clientY));
+    b.addEventListener('mouseleave',hideTip);
+  });
+})();
+</script>
+</body></html>
