@@ -204,9 +204,9 @@ def build(metrics: dict) -> str:
 
     dark_section = section(
         "🛰️ Dark-vessel events (highest confidence first)",
-        "Ships that went silent, then reappeared. Sort by any column; filter by typing.",
+        "Ships that went silent, then reappeared. Click a column header to sort.",
         table(["MMSI", "Flag", "Dark start", "Dark end", "Gap (min)", "Confidence"], dark_rows,
-              "no dark events detected", numeric={4, 5}, filterable=True, tid="darktable")
+              "no dark events detected", numeric={4, 5}, tid="darktable")
         + f'<p class="hint">Longest silence: {esc(de.get("max_gap_minutes", 0))} min. '
           'Terrestrial AIS has real coverage dead zones, so a dark event is a <i>candidate</i> '
           'signal, not proof of intent.</p>',
