@@ -53,6 +53,30 @@ def bars(rows: list[dict], label_key: str, count_key: str) -> str:
     return '<div class="bars">' + "".join(out) + "</div>"
 
 
+def commodity_section(c: dict) -> str:
+    if not c:
+        return ""
+    share = (c.get("avg_tanker_share", 0) or 0) * 100
+    kpis = "".join([
+        kpi("Tankers", c.get("distinct_tankers", 0), "AIS type 80-89"),
+        kpi("Tanker share", f"{share:.1f}%", "of vessels (avg/hr)"),
+        kpi("Floating storage", c.get("floating_storage_candidates", 0), "idle-tanker candidates"),
+    ])
+    flow_rows = [
+        [r.get("hour"), r.get("vessels"), r.get("tankers"), r.get("tanker_share")]
+        for r in c.get("flow", [])
+    ]
+    flow_tbl = table(["Hour (UTC)", "Vessels", "Tankers", "Tanker share"], flow_rows, "no flow data")
+    return (
+        '<section><h2>Commodity indicators — tanker flow &amp; floating storage</h2>'
+        f'<div class="grid">{kpis}</div>'
+        f'<div class="panel" style="margin-top:14px">{flow_tbl}'
+        '<div class="note"><b>Indicator, not a price predictor.</b> Tanker throughput and floating '
+        'storage (idle tankers) are established inputs to crude/gas analysis. A single chokepoint '
+        'and short history make this illustrative, not market-grade.</div></div></section>'
+    )
+
+
 def build(metrics: dict) -> str:
     layers = metrics.get("layers", {})
     de = metrics.get("dark_events", {}) or {}
@@ -88,6 +112,7 @@ def build(metrics: dict) -> str:
         ),
         quar_table=table(["Reason code", "Count"], quar_rows, "no quarantined records"),
         max_gap=esc(de.get("max_gap_minutes", 0)),
+        commodity=commodity_section(metrics.get("commodity", {})),
     )
 
 
@@ -138,6 +163,8 @@ TEMPLATE = """<!doctype html>
     (clean · dedup · enrich · DQ) → <b>gold</b> (dark events)</div>
 
   <div class="grid">{kpis}</div>
+
+  {commodity}
 
   <section><h2>Dark-vessel events (highest confidence)</h2>
     <div class="panel">{dark_table}

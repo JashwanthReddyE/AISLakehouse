@@ -45,10 +45,11 @@ Event Hubs, and builds a Medallion lakehouse on Databricks + ADLS Gen2 — with 
 |---|---|
 | `ingestion/` | Always-on WebSocket consumer + Event Hubs producer |
 | `silver/` | Pure-Python (unit-tested) silver logic: MMSI→flag, destination normalization, DQ |
-| `gold/` | Pure-Python (unit-tested) dark-vessel detection: gap analysis + confidence scoring |
+| `gold/` | Pure-Python (unit-tested) analytics: dark-vessel detection + tanker/floating-storage |
 | `databricks/bronze_stream.py` | Structured Streaming bronze write |
 | `databricks/silver_stream.py` | bronze→silver: parse, watermark+dedup, enrich, DQ quarantine |
 | `databricks/gold_dark_vessel.py` | silver→gold: per-vessel reporting-gap detection → `dark_events` |
+| `databricks/gold_tanker_flow.py` | silver→gold: tanker classification, flow, floating-storage indicator |
 | `databricks/export_metrics.py` | exports all-layer metrics → JSON for the dashboard |
 | `serving/` | static results dashboard (`index.html`) + generator (`build_dashboard.py`) |
 | `infra/` | Bicep IaC: base (`main.bicep`) + 24/7 ingestion (`ingestion.bicep` → Container Apps) |
@@ -105,3 +106,12 @@ python serving/build_dashboard.py
 > **Dark-vessel caveat:** terrestrial AIS has genuine coverage dead zones, and sparse ingestion
 > creates gaps too — so a dark event is a *candidate* signal, not proof of intent. Continuous
 > ingestion (Week 4) is what turns these from coverage artifacts into real behavior signal.
+
+### Commodity indicators (not price prediction)
+
+A second gold metric derives **tanker flow** (hourly distinct-tanker transit through the strait)
+and a **floating-storage** proxy (tankers clustered within a small radius at ~0 speed for a long
+span — a classic crude-oversupply signal). These are *indicators* that commodity desks use as
+inputs, **not** an oil/gas price predictor: a single chokepoint and short history make them
+illustrative, not market-grade. Credible alpha would need price series, multi-region coverage,
+long history, and a backtested model.

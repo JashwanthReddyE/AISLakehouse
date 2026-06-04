@@ -50,8 +50,33 @@ def iso(df, col):
     return v.isoformat() if v is not None else None
 
 
+# Commodity indicators (tanker flow + floating storage). Optional — skip if not yet built.
+try:
+    flow = load("gold/tanker_flow")
+    fs = load("gold/floating_storage")
+    commodity = {
+        "distinct_tankers": fs.count(),
+        "floating_storage_candidates": fs.where("is_floating_storage").count(),
+        "avg_tanker_share": flow.agg(F.round(F.avg("tanker_share"), 3).alias("s")).collect()[0]["s"] or 0.0,
+        "flow": rows(
+            flow.orderBy(F.desc("hour")).select(
+                F.date_format("hour", "MM-dd HH:00").alias("hour"), "vessels", "tankers", "tanker_share"
+            ),
+            12,
+        ),
+        "floating_storage_top": rows(
+            fs.orderBy(F.desc("is_floating_storage"), F.asc("spread_nm")).select(
+                "mmsi", "flag_country", "span_hours", "spread_nm", "avg_sog", "n_points", "is_floating_storage"
+            ),
+            10,
+        ),
+    }
+except Exception:
+    commodity = {}
+
 metrics = {
     "generated_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+    "commodity": commodity,
     "layers": {
         "bronze": bronze_n,
         "silver_positions": pos_n,
