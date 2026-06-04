@@ -1,7 +1,7 @@
 using './main.bicep'
 
-// Fill these in before deploying. alertEmail is required.
-param alertEmail = 'jashwanthreddyearla@gmail.com'
+// Fill these in before deploying. alertEmail is required (budget-alert recipient).
+param alertEmail = 'you@example.com'
 param namePrefix = 'aislake'
 param budgetAmount = 10
 param budgetStartDate = '2026-06-01'
