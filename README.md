@@ -8,6 +8,9 @@ Event Hubs, and builds a Medallion lakehouse on Databricks + ADLS Gen2 — with 
 
 > **Status: Week 4 — 24/7 ingestion live + results dashboard.** Full pipeline running:
 > `AISStream → Container Apps consumer (24/7) → Event Hubs → bronze → silver → gold → dashboard`.
+>
+> ### ▶ Live dashboard: **https://aislakehouse.vercel.app**
+> Watching Singapore · Rotterdam · Houston · Strait of Hormuz in real time.
 
 ## Architecture (Week 1 slice)
 

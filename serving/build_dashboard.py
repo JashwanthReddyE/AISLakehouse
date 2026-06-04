@@ -251,9 +251,10 @@ def build(metrics: dict) -> str:
         + '<div class="wrap">'
         + HEADER
         + '<section class="intro"><h2 class="acc-blue">How to read this dashboard</h2>'
-          '<p>This project watches ships near the <b>Singapore Strait</b> — one of the world\'s '
-          'busiest shipping lanes — in real time, and looks for <b>unusual behaviour</b> rather than '
-          'just plotting dots on a map. Raw radio messages flow through three refinement stages '
+          '<p>This project watches ships across four of the world\'s busiest maritime regions '
+          '(<b>Singapore, Rotterdam, Houston</b> and the <b>Strait of Hormuz</b>) in real time, and '
+          'looks for <b>unusual behaviour</b> rather than just plotting dots on a map. Raw radio '
+          'messages flow through three refinement stages '
           '(<span class="tag t-bronze">Bronze</span> → <span class="tag t-cyan">Silver</span> → '
           '<span class="tag t-gold">Gold</span>) and end as the analytics below. Hover the '
           '<span class="ipill">i</span> on any card for a plain-English explanation, and see the '
@@ -323,11 +324,21 @@ HEAD = """<!doctype html>
   h3 { font-size:14px; margin:0 0 8px; color:var(--fg); }
   .sec-desc { color:var(--mut); margin:0 0 14px; font-size:13.5px; }
   .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:14px; }
-  .kpi { position:relative; background:linear-gradient(180deg,var(--card),var(--card2));
-    border:1px solid var(--line); border-radius:14px; padding:18px 16px; overflow:hidden;
-    transition:transform .15s ease, box-shadow .15s ease; }
-  .kpi::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--blue); }
-  .kpi:hover { transform:translateY(-3px); box-shadow:0 10px 30px rgba(0,0,0,.35); }
+  .kpi { position:relative; isolation:isolate; overflow:hidden; border-radius:16px;
+    padding:18px 16px; border:1px solid rgba(255,255,255,.10);
+    background:linear-gradient(158deg, rgba(40,52,90,.55), rgba(13,21,44,.40));
+    backdrop-filter:blur(11px) saturate(140%); -webkit-backdrop-filter:blur(11px) saturate(140%);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.20), inset 0 0 22px rgba(255,255,255,.03),
+      0 8px 26px rgba(2,6,20,.45);
+    transition:transform .18s ease, box-shadow .18s ease; }
+  .kpi > * { position:relative; z-index:2; }
+  .kpi::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--blue); z-index:2; }
+  /* glossy diagonal sheen */
+  .kpi::after { content:""; position:absolute; inset:0; z-index:1; pointer-events:none;
+    background:linear-gradient(125deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.06) 16%,
+      transparent 38%, transparent 100%); }
+  .kpi:hover { transform:translateY(-4px);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.30), 0 16px 42px rgba(2,6,20,.55); }
   .kpi-val { font-size:30px; font-weight:800; letter-spacing:.5px; }
   .kpi-label { color:#dbe4ff; font-size:13px; margin-top:3px; font-weight:600; }
   .kpi-sub { color:var(--mut); font-size:11px; margin-top:6px; }
@@ -345,11 +356,14 @@ HEAD = """<!doctype html>
     text-align:center; cursor:help; }
   .info { position:absolute; top:10px; right:10px; }
   .ipill { display:inline-block; }
-  .panel { background:linear-gradient(180deg,rgba(18,26,51,.85),rgba(15,23,48,.7));
-    border:1px solid var(--line); border-radius:14px; padding:18px; margin-top:14px; }
   .two { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  .panel, .two > div { background:linear-gradient(180deg,rgba(18,26,51,.85),rgba(15,23,48,.7));
-    border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .panel, .two > div, .intro {
+    background:linear-gradient(160deg, rgba(26,36,66,.55), rgba(11,19,40,.42));
+    backdrop-filter:blur(13px) saturate(135%); -webkit-backdrop-filter:blur(13px) saturate(135%);
+    border:1px solid rgba(255,255,255,.09); border-radius:16px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.14), 0 10px 30px rgba(2,6,20,.40); }
+  .panel { padding:18px; margin-top:14px; }
+  .two > div { padding:16px; }
   @media (max-width:720px){ .two{ grid-template-columns:1fr; } }
   .table-wrap { overflow-x:auto; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
@@ -423,8 +437,8 @@ HEADER = """
 <header>
   <h1>AISLakehouse</h1>
   <span class="live"><span class="dot"></span> 24/7 ingestion live</span>
-  <div class="subtitle">Real-time maritime <b>behaviour</b> analytics · Singapore Strait ·
-    dark-vessel detection &amp; commodity signals</div>
+  <div class="subtitle">Real-time maritime <b>behaviour</b> analytics · Singapore · Rotterdam ·
+    Houston · Hormuz · dark-vessel detection &amp; commodity signals</div>
 </header>
 """
 

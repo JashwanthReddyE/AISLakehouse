@@ -1,0 +1,19 @@
+# Only serving/ is published. Keep secrets, envs, and build junk out of the upload.
+.env
+*.env
+!serving/
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.git
+_checkpoints
+local_data
+infra
+databricks
+ingestion
+silver
+gold
+tests
