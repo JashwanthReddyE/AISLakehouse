@@ -16,7 +16,7 @@ def make_settings(**overrides):
         api_key="k",
         eventhub_connection_string="Endpoint=sb://x",
         eventhub_name="ais-raw",
-        bbox=(1.0, 103.0, 2.0, 104.0),
+        bboxes=((1.0, 103.0, 2.0, 104.0),),
         idle_timeout_s=0.02,
         backoff_max_s=60.0,
     )
@@ -25,10 +25,17 @@ def make_settings(**overrides):
 
 
 def test_build_subscription_shape():
-    sub = build_subscription("key", (1.0, 103.0, 2.0, 104.0), ("PositionReport",))
+    sub = build_subscription("key", ((1.0, 103.0, 2.0, 104.0),), ("PositionReport",))
     assert sub["APIKey"] == "key"
     assert sub["BoundingBoxes"] == [[[1.0, 103.0], [2.0, 104.0]]]
     assert sub["FilterMessageTypes"] == ["PositionReport"]
+
+
+def test_build_subscription_multi_box():
+    sub = build_subscription(
+        "key", ((1.0, 103.0, 2.0, 104.0), (51.0, 3.0, 52.0, 4.5)), ("PositionReport",)
+    )
+    assert len(sub["BoundingBoxes"]) == 2
 
 
 def test_compute_backoff_exponential_and_capped():

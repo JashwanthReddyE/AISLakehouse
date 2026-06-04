@@ -37,10 +37,27 @@ def parse_bbox(raw: str) -> BoundingBox:
     return (min_lat, min_lon, max_lat, max_lon)
 
 
-def bbox_to_aisstream(bbox: BoundingBox) -> list[list[list[float]]]:
-    """Convert (minLat, minLon, maxLat, maxLon) to AISStream's nested [[[lat,lon],[lat,lon]]]."""
+def parse_bboxes(raw: str) -> tuple[BoundingBox, ...]:
+    """Parse one or more ';'-separated boxes into a tuple of validated bounding boxes.
+
+    Each box is 'minLat,minLon,maxLat,maxLon'. Multiple boxes let us watch several regions
+    (e.g. Singapore + Rotterdam + Houston + Hormuz) without subscribing to the global firehose.
+    """
+    boxes = tuple(parse_bbox(b) for b in raw.split(";") if b.strip())
+    if not boxes:
+        raise ValueError(f"AIS_BBOX must contain at least one box, got: {raw!r}")
+    return boxes
+
+
+def bbox_to_aisstream(bbox: BoundingBox) -> list[list[float]]:
+    """Convert (minLat, minLon, maxLat, maxLon) to AISStream's [[lat,lon],[lat,lon]] pair."""
     min_lat, min_lon, max_lat, max_lon = bbox
-    return [[[min_lat, min_lon], [max_lat, max_lon]]]
+    return [[min_lat, min_lon], [max_lat, max_lon]]
+
+
+def bboxes_to_aisstream(bboxes: tuple[BoundingBox, ...]) -> list[list[list[float]]]:
+    """Convert several boxes to AISStream's BoundingBoxes list-of-pairs format."""
+    return [bbox_to_aisstream(b) for b in bboxes]
 
 
 def load_env_file(path: str | os.PathLike[str] = ".env") -> None:
@@ -65,7 +82,7 @@ class Settings:
     api_key: str
     eventhub_connection_string: str
     eventhub_name: str
-    bbox: BoundingBox
+    bboxes: tuple[BoundingBox, ...]
     message_types: tuple[str, ...] = DEFAULT_MESSAGE_TYPES
     idle_timeout_s: float = 30.0
     backoff_max_s: float = 60.0
@@ -83,7 +100,7 @@ class Settings:
             api_key=api_key,
             eventhub_connection_string=conn,
             eventhub_name=os.environ.get("EVENTHUB_NAME", "ais-raw"),
-            bbox=parse_bbox(os.environ.get("AIS_BBOX", "1.05,103.5,1.45,104.1")),
+            bboxes=parse_bboxes(os.environ.get("AIS_BBOX", "1.05,103.5,1.45,104.1")),
             idle_timeout_s=float(os.environ.get("IDLE_TIMEOUT_S", "30")),
             backoff_max_s=float(os.environ.get("BACKOFF_MAX_S", "60")),
         )

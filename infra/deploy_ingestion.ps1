@@ -59,6 +59,8 @@ Stop-OnError "Could not read ACR credentials."
 $envFile = Join-Path $root '.env'
 $aisKey = (Get-Content $envFile | Where-Object { $_ -match '^\s*AISSTREAM_API_KEY\s*=' }) -replace '^\s*AISSTREAM_API_KEY\s*=\s*', ''
 if (-not $aisKey) { Write-Error "AISSTREAM_API_KEY not found in $envFile"; exit 1 }
+$aisBbox = (Get-Content $envFile | Where-Object { $_ -match '^\s*AIS_BBOX\s*=' }) -replace '^\s*AIS_BBOX\s*=\s*', ''
+if (-not $aisBbox) { $aisBbox = '1.05,103.5,1.45,104.1' }
 
 $ehNs = az eventhubs namespace list -g $ResourceGroup --query "[0].name" -o tsv
 $ehConn = az eventhubs eventhub authorization-rule keys list `
@@ -73,6 +75,7 @@ az deployment group create `
     --parameters location=$Location namePrefix=$NamePrefix `
     --parameters acrLoginServer=$acrServer acrUsername=$acrUser acrPassword=$acrPass image=$image `
     --parameters aisStreamApiKey=$aisKey eventHubConnectionString=$ehConn `
+    --parameters "aisBbox=$aisBbox" `
     -o none
 Stop-OnError "Container App deployment failed."
 

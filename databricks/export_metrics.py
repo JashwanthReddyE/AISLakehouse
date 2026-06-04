@@ -103,12 +103,19 @@ metrics = {
         ).orderBy(F.desc("confidence"), F.desc("gap_minutes")),
         12,
     ),
+    # Count DISTINCT vessels per flag/destination (not position rows) so high-frequency local
+    # craft don't dominate — a far more representative international picture.
     "top_flags": rows(
-        pos.groupBy("flag_country").count().orderBy(F.desc("count")), 10
+        pos.groupBy("flag_country")
+        .agg(F.countDistinct("mmsi").alias("count"))
+        .orderBy(F.desc("count")),
+        10,
     ),
     "top_destinations": rows(
         static.where("destination IS NOT NULL")
-        .groupBy("destination").count().orderBy(F.desc("count")),
+        .groupBy("destination")
+        .agg(F.countDistinct("mmsi").alias("count"))
+        .orderBy(F.desc("count")),
         10,
     ),
     "freshness": {

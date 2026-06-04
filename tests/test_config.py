@@ -1,6 +1,12 @@
 import pytest
 
-from ingestion.config import Settings, bbox_to_aisstream, parse_bbox
+from ingestion.config import (
+    Settings,
+    bbox_to_aisstream,
+    bboxes_to_aisstream,
+    parse_bbox,
+    parse_bboxes,
+)
 
 
 def test_parse_bbox_valid():
@@ -25,7 +31,18 @@ def test_parse_bbox_invalid(raw):
 
 
 def test_bbox_to_aisstream_shape():
-    assert bbox_to_aisstream((1.0, 103.0, 2.0, 104.0)) == [[[1.0, 103.0], [2.0, 104.0]]]
+    assert bbox_to_aisstream((1.0, 103.0, 2.0, 104.0)) == [[1.0, 103.0], [2.0, 104.0]]
+
+
+def test_parse_bboxes_single_and_multi():
+    assert parse_bboxes("1.0,103.0,2.0,104.0") == ((1.0, 103.0, 2.0, 104.0),)
+    multi = parse_bboxes("1.0,103.0,2.0,104.0; 51.0,3.0,52.0,4.5")
+    assert multi == ((1.0, 103.0, 2.0, 104.0), (51.0, 3.0, 52.0, 4.5))
+
+
+def test_bboxes_to_aisstream_shape():
+    out = bboxes_to_aisstream(((1.0, 103.0, 2.0, 104.0), (51.0, 3.0, 52.0, 4.5)))
+    assert out == [[[1.0, 103.0], [2.0, 104.0]], [[51.0, 3.0], [52.0, 4.5]]]
 
 
 def test_settings_from_env(monkeypatch):
@@ -35,8 +52,16 @@ def test_settings_from_env(monkeypatch):
     monkeypatch.setenv("EVENTHUB_NAME", "ais-raw")
     s = Settings.from_env(load_dotenv=False)
     assert s.api_key == "k"
-    assert s.bbox == (1.0, 103.0, 2.0, 104.0)
+    assert s.bboxes == ((1.0, 103.0, 2.0, 104.0),)
     assert s.eventhub_name == "ais-raw"
+
+
+def test_settings_from_env_multi_bbox(monkeypatch):
+    monkeypatch.setenv("AISSTREAM_API_KEY", "k")
+    monkeypatch.setenv("EVENTHUB_CONNECTION_STRING", "Endpoint=sb://x")
+    monkeypatch.setenv("AIS_BBOX", "1.0,103.0,2.0,104.0;51.0,3.0,52.0,4.5")
+    s = Settings.from_env(load_dotenv=False)
+    assert len(s.bboxes) == 2
 
 
 def test_settings_missing_required(monkeypatch):

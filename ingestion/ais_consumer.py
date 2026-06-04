@@ -21,7 +21,7 @@ from datetime import UTC, datetime
 
 import websockets
 
-from .config import AIS_WS_URL, BoundingBox, Settings, bbox_to_aisstream
+from .config import AIS_WS_URL, BoundingBox, Settings, bboxes_to_aisstream
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +30,12 @@ FrameHandler = Callable[[str, str], Awaitable[None]]
 
 
 def build_subscription(
-    api_key: str, bbox: BoundingBox, message_types: tuple[str, ...]
+    api_key: str, bboxes: tuple[BoundingBox, ...], message_types: tuple[str, ...]
 ) -> dict:
     """Build the AISStream subscription message (sent immediately after connect)."""
     return {
         "APIKey": api_key,
-        "BoundingBoxes": bbox_to_aisstream(bbox),
+        "BoundingBoxes": bboxes_to_aisstream(bboxes),
         "FilterMessageTypes": list(message_types),
     }
 
@@ -104,13 +104,15 @@ class AISConsumer:
     async def _run_once(self, handler: FrameHandler) -> float:
         """One connection lifetime. Returns the loop-time at which it connected."""
         sub = build_subscription(
-            self._settings.api_key, self._settings.bbox, self._settings.message_types
+            self._settings.api_key, self._settings.bboxes, self._settings.message_types
         )
         async with self._connect(AIS_WS_URL) as ws:
             connected_at = asyncio.get_event_loop().time()
             # Subscription MUST be sent within 3s or AISStream drops the connection.
             await ws.send(json.dumps(sub))
-            logger.info("Subscribed to AISStream bbox=%s", self._settings.bbox)
+            logger.info(
+                "Subscribed to AISStream (%d region box(es))", len(self._settings.bboxes)
+            )
 
             while not self._shutdown.is_set():
                 try:
