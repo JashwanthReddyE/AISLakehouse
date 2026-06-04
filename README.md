@@ -6,8 +6,8 @@ Event Hubs, and builds a Medallion lakehouse on Databricks + ADLS Gen2 — with 
 **vessel-behavior analytics** (dark-vessel detection, loitering, port-call inference) rather than
 "dots on a map."
 
-> **Status: Week 3 (gold) — dark-vessel detection working.** Proven end-to-end:
-> `AISStream → consumer → Event Hubs → bronze → silver (clean/dedup/enrich + quarantine) → gold (dark events)`.
+> **Status: Week 4 — 24/7 ingestion live + results dashboard.** Full pipeline running:
+> `AISStream → Container Apps consumer (24/7) → Event Hubs → bronze → silver → gold → dashboard`.
 
 ## Architecture (Week 1 slice)
 
@@ -49,7 +49,9 @@ Event Hubs, and builds a Medallion lakehouse on Databricks + ADLS Gen2 — with 
 | `databricks/bronze_stream.py` | Structured Streaming bronze write |
 | `databricks/silver_stream.py` | bronze→silver: parse, watermark+dedup, enrich, DQ quarantine |
 | `databricks/gold_dark_vessel.py` | silver→gold: per-vessel reporting-gap detection → `dark_events` |
-| `infra/` | Bicep IaC (budget alert first, Event Hubs, ADLS Gen2, Key Vault) |
+| `databricks/export_metrics.py` | exports all-layer metrics → JSON for the dashboard |
+| `serving/` | static results dashboard (`index.html`) + generator (`build_dashboard.py`) |
+| `infra/` | Bicep IaC: base (`main.bicep`) + 24/7 ingestion (`ingestion.bicep` → Container Apps) |
 | `tests/` | Unit tests (no network): config, backoff/heartbeat, producer, MMSI, destinations, DQ |
 | `.github/workflows/ci.yml` | ruff + pytest on PR |
 
@@ -65,8 +67,23 @@ python -m ingestion.main
 ## Provision Azure (IaC)
 
 ```powershell
-# Sets up budget alert FIRST, then Event Hubs (Standard), ADLS Gen2, Key Vault.
+# Base: budget alert FIRST, then Event Hubs (Standard), ADLS Gen2, Key Vault.
 ./infra/deploy.ps1
+# Always-on ingestion: ACR + cloud image build + Container Apps (24/7 consumer).
+./infra/deploy_ingestion.ps1
+```
+
+## Results dashboard
+
+A self-contained `serving/index.html` summarises every layer (row counts, quarantine rate,
+dark-vessel events, flag states, normalized destinations, freshness). Regenerate after a
+pipeline run:
+
+```bash
+# 1. run databricks/export_metrics.py -> save its JSON output to serving/metrics.json
+# 2. render the page:
+python serving/build_dashboard.py
+# 3. open serving/index.html  (or host serving/ on GitHub Pages / Vercel)
 ```
 
 ## Cost discipline (non-negotiable)
@@ -82,8 +99,8 @@ python -m ingestion.main
   `(MMSI, event_time)`, MMSI→flag enrichment, destination normalization, DQ quarantine (rate ~1.9%).
 - **Week 3 — Gold:** ✅ dark-vessel detection working end-to-end (gap analysis + confidence,
   unit-tested). Remaining: optional dbt formalization + minimal serving query.
-- **Week 4 — Maturity:** Container Apps deploy (24/7 ingestion), CI/CD, scheduled gold refresh +
-  LLM daily brief, observability, teardown script.
+- **Week 4 — Maturity:** ✅ 24/7 ingestion on Container Apps + static results dashboard.
+  Remaining: scheduled gold refresh + LLM daily brief, deeper observability.
 
 > **Dark-vessel caveat:** terrestrial AIS has genuine coverage dead zones, and sparse ingestion
 > creates gaps too — so a dark event is a *candidate* signal, not proof of intent. Continuous

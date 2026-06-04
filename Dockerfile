@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Install only runtime deps for a lean image.
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir websockets>=12.0 azure-eventhub>=5.11
+RUN pip install --no-cache-dir "websockets>=12.0" "azure-eventhub>=5.11"
 
 COPY ingestion/ ./ingestion/
 
