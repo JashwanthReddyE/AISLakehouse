@@ -125,9 +125,8 @@ def commodity_block(c: dict) -> str:
     body = (
         f'<div class="grid">{kpis}</div>'
         '<div class="panel"><h3>Hourly tanker flow</h3>'
-        '<p class="hint">Bars show all vessels (faint) vs tankers (teal) seen each hour. '
-        'Hover a bar for exact counts.</p>'
-        '<div id="flowchart" class="chart"></div>'
+        '<p class="hint">Distinct vessels vs tankers seen each hour, with tanker share. '
+        'Click a column header to sort.</p>'
         f'{flow_tbl}{disclaimer}</div>'
     )
     return section("🛢️ Commodity indicators — tanker flow & floating storage",
@@ -370,7 +369,6 @@ HEAD = """<!doctype html>
   .bar-cyan { background:linear-gradient(90deg,#1f8fb5,#37d6e6); }
   .bar-teal { background:linear-gradient(90deg,#0f9b8e,#2dd4bf); }
   .bar-num { text-align:right; font-variant-numeric:tabular-nums; font-size:12px; }
-  .chart { width:100%; overflow-x:auto; margin:6px 0 14px; }
   .hint, .disclaimer { color:var(--mut); font-size:12px; margin:8px 0 0; }
   .disclaimer { border-left:3px solid var(--gold); padding:8px 12px; background:rgba(255,210,74,.06);
     border-radius:0 8px 8px 0; margin-top:12px; }
@@ -492,31 +490,6 @@ document.querySelectorAll('.filter').forEach(inp=>{
     [...tb.tBodies[0].rows].forEach(r=>{ r.style.display = r.textContent.toLowerCase().includes(q)?'':'none'; });
   });
 });
-
-/* Interactive hourly tanker-flow chart */
-(function(){
-  const c = METRICS.commodity && METRICS.commodity.flow; const host=document.getElementById('flowchart');
-  if(!host || !c || !c.length) { if(host) host.innerHTML='<p class="empty">no flow data yet</p>'; return; }
-  const data=[...c].reverse(); // chronological
-  const W=Math.max(520, data.length*70), H=190, pad=30, bw=Math.min(46,(W-2*pad)/data.length-12);
-  const max=Math.max(...data.map(d=>d.vessels),1);
-  const x=i=>pad+i*((W-2*pad)/data.length)+6;
-  const y=v=>H-pad-(v/max)*(H-2*pad);
-  let svg=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`;
-  svg+=`<line x1="${pad}" y1="${H-pad}" x2="${W-6}" y2="${H-pad}" stroke="#26314f"/>`;
-  data.forEach((d,i)=>{
-    const xv=x(i);
-    svg+=`<rect x="${xv}" y="${y(d.vessels)}" width="${bw}" height="${H-pad-y(d.vessels)}" rx="3" fill="#26406e" class="b" data-l="${d.hour}: ${d.vessels} vessels"/>`;
-    svg+=`<rect x="${xv}" y="${y(d.tankers)}" width="${bw}" height="${H-pad-y(d.tankers)}" rx="3" fill="#2dd4bf" class="b" data-l="${d.hour}: ${d.tankers} tankers (${(d.tanker_share*100).toFixed(1)}% share)"/>`;
-    svg+=`<text x="${xv+bw/2}" y="${H-pad+14}" fill="#93a0c6" font-size="10" text-anchor="middle">${d.hour.slice(-5)}</text>`;
-  });
-  svg+=`</svg>`; host.innerHTML=svg;
-  host.querySelectorAll('.b').forEach(b=>{
-    b.style.cursor='pointer';
-    b.addEventListener('mousemove',e=>showTip(b.dataset.l,e.clientX,e.clientY));
-    b.addEventListener('mouseleave',hideTip);
-  });
-})();
 </script>
 """
 
