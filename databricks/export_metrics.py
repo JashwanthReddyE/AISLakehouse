@@ -18,6 +18,7 @@ base = f"abfss://{CONTAINER}@{STORAGE}.dfs.core.windows.net"
 import json
 
 from pyspark.sql import functions as F
+from pyspark.sql.window import Window
 
 
 def load(path):
@@ -74,9 +75,157 @@ try:
 except Exception:
     commodity = {}
 
+# COMMAND ----------
+# Vessel categories, live positions, regional activity, anomalies.
+# AIS broadcasts a numeric *ship-type* code (not a cargo manifest), so categories are a
+# vessel-class proxy for "what's being carried". Counts are DISTINCT vessels.
+
+
+def category_expr(col):
+    t = F.col(col)
+    return (
+        F.when(t.between(80, 89), "Tanker (oil · gas · chemical)")
+        .when(t.between(70, 79), "Cargo (container · bulk)")
+        .when(t.between(60, 69), "Passenger")
+        .when(t.between(40, 49), "High-speed craft")
+        .when(t == 30, "Fishing")
+        .when(t.isin(31, 32, 52), "Tug & tow")
+        .when(t.isin(33, 34, 35, 50, 51, 53, 54, 55, 56, 57, 58), "Service / port craft")
+        .when(t.isin(36, 37), "Pleasure / sailing")
+        .otherwise("Unknown / other")
+    )
+
+
+# Latest static record per vessel (name, type, destination).
+static_latest = (
+    static.withColumn(
+        "rn",
+        F.row_number().over(
+            Window.partitionBy("mmsi").orderBy(
+                F.col("event_time").desc_nulls_last(), F.col("silver_processed_ts").desc_nulls_last()
+            )
+        ),
+    )
+    .where("rn = 1")
+    .select(
+        "mmsi", "ship_name", "destination", category_expr("ship_type").alias("category")
+    )
+)
+
+vessel_categories = rows(
+    static_latest.groupBy("category").agg(F.countDistinct("mmsi").alias("count")).orderBy(F.desc("count")),
+    12,
+)
+
+# Latest position per vessel (for the live map + regional rollups).
+pos_latest = (
+    pos.withColumn(
+        "rn", F.row_number().over(Window.partitionBy("mmsi").orderBy(F.col("event_time").desc_nulls_last()))
+    )
+    .where("rn = 1")
+    .select(
+        "mmsi",
+        "flag_country",
+        "event_time",
+        F.round("latitude", 4).alias("lat"),
+        F.round("longitude", 4).alias("lon"),
+        F.round("sog", 1).alias("sog"),
+        F.round("cog", 0).cast("int").alias("cog"),
+        "nav_status",
+    )
+)
+
+pos_enriched = pos_latest.join(static_latest, "mmsi", "left").withColumn(
+    "category", F.coalesce("category", F.lit("Unknown / other"))
+)
+
+vessel_positions = rows(
+    pos_enriched.orderBy(F.desc("event_time")).select(
+        "mmsi",
+        "lat",
+        "lon",
+        F.coalesce("sog", F.lit(0.0)).alias("sog"),
+        F.coalesce("cog", F.lit(0)).alias("cog"),
+        "flag_country",
+        "category",
+        F.coalesce("ship_name", F.lit("")).alias("name"),
+        F.coalesce("destination", F.lit("")).alias("destination"),
+    ),
+    320,
+)
+
+# Regional activity for the four monitored chokepoints.
+# (name, lat_min, lat_max, lon_min, lon_max)
+REGIONS = [
+    ("Singapore & Malacca", 0.4, 2.0, 102.8, 105.4),
+    ("Rotterdam & North Sea", 50.6, 52.8, 2.0, 5.2),
+    ("Houston & US Gulf", 26.8, 30.4, -96.2, -92.6),
+    ("Strait of Hormuz", 24.2, 27.8, 53.6, 58.2),
+]
+
+
+def region_expr():
+    e = None
+    for name, la0, la1, lo0, lo1 in REGIONS:
+        cond = F.col("lat").between(la0, la1) & F.col("lon").between(lo0, lo1)
+        e = F.when(cond, name) if e is None else e.when(cond, name)
+    return e.otherwise("Open water / transit")
+
+
+region_rollup = {
+    r["region"]: r
+    for r in [
+        x.asDict()
+        for x in pos_enriched.withColumn("region", region_expr())
+        .groupBy("region")
+        .agg(
+            F.countDistinct("mmsi").alias("vessels"),
+            F.round(F.avg("sog"), 1).alias("avg_sog"),
+            F.sum(F.when(F.col("sog") < 0.5, 1).otherwise(0)).alias("idle"),
+            F.sum(F.when(F.col("sog") >= 0.5, 1).otherwise(0)).alias("moving"),
+        )
+        .collect()
+    ]
+}
+regions = []
+for _name, *_bounds in REGIONS:
+    s = region_rollup.get(_name)
+    if s:
+        regions.append(
+            {
+                "region": _name,
+                "vessels": s["vessels"],
+                "avg_sog": s["avg_sog"] or 0.0,
+                "idle": s["idle"] or 0,
+                "moving": s["moving"] or 0,
+            }
+        )
+
+# Over-speed outliers: implausibly fast for large vessels (likely glitch or fast craft).
+overspeed_df = pos_enriched.where("sog > 30 AND sog <= 102.3")
+anomalies = {
+    "overspeed_count": overspeed_df.count(),
+    "overspeed_sample": rows(
+        overspeed_df.orderBy(F.desc("sog")).select(
+            "mmsi",
+            "flag_country",
+            "category",
+            "sog",
+            F.coalesce("ship_name", F.lit("")).alias("name"),
+        ),
+        8,
+    ),
+}
+
+# COMMAND ----------
+
 metrics = {
     "generated_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
     "commodity": commodity,
+    "vessel_categories": vessel_categories,
+    "vessel_positions": vessel_positions,
+    "regions": regions,
+    "anomalies": anomalies,
     "layers": {
         "bronze": bronze_n,
         "silver_positions": pos_n,

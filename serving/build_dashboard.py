@@ -133,6 +133,249 @@ def commodity_block(c: dict) -> str:
                    "Reading ship movements as an early signal of oil & gas activity.", body, "teal")
 
 
+# Vessel-class colours — shared by the live map dots and the "what's being carried" bars.
+CATEGORY_COLORS = {
+    "Tanker (oil · gas · chemical)": "#ffd24a",
+    "Cargo (container · bulk)": "#37d6e6",
+    "Passenger": "#ff79c6",
+    "High-speed craft": "#b08cff",
+    "Fishing": "#4ade80",
+    "Tug & tow": "#5aa6ff",
+    "Service / port craft": "#2dd4bf",
+    "Pleasure / sailing": "#9fb0d8",
+    "Unknown / other": "#7c8ab5",
+}
+
+# Monitored chokepoints drawn on the map (name, lat_min, lat_max, lon_min, lon_max).
+REGION_BOXES = [
+    ("Singapore", 0.4, 2.0, 102.8, 105.4),
+    ("Rotterdam", 50.6, 52.8, 2.0, 5.2),
+    ("Houston", 26.8, 30.4, -96.2, -92.6),
+    ("Hormuz", 24.2, 27.8, 53.6, 58.2),
+]
+
+# Coarse continent silhouettes (lon, lat) — context only, not cartographically precise.
+CONTINENTS = [
+    [(-168, 65), (-140, 70), (-95, 72), (-60, 68), (-52, 47), (-66, 45), (-80, 25),
+     (-97, 18), (-105, 23), (-117, 32), (-125, 40), (-140, 58)],
+    [(-80, 8), (-60, 10), (-50, 0), (-35, -8), (-40, -23), (-58, -40), (-72, -52),
+     (-75, -40), (-70, -20), (-80, -5)],
+    [(-10, 43), (-9, 38), (3, 40), (18, 40), (28, 41), (40, 46), (40, 60), (30, 70),
+     (10, 71), (5, 62), (-5, 58), (-10, 50)],
+    [(-17, 21), (-16, 14), (-8, 4), (8, 4), (10, -1), (13, -10), (20, -34), (26, -34),
+     (33, -26), (40, -15), (51, 12), (43, 11), (33, 30), (20,32), (10, 37), (-6, 36)],
+    [(40, 46), (50, 42), (60, 25), (77, 8), (80, 15), (90, 22), (100, 5), (105, 1),
+     (120, 5), (122, 15), (140, 35), (143, 45), (160, 60), (180, 68), (170, 70),
+     (140, 73), (100, 78), (70, 76), (60, 68), (50, 60), (40, 60)],
+    [(113, -22), (122, -18), (130, -12), (142, -11), (150, -22), (153, -28),
+     (146, -39), (138, -35), (129, -32), (115, -34)],
+]
+
+MAP_W, MAP_H = 1000, 500
+
+
+def _proj(lon: float, lat: float) -> tuple[float, float]:
+    """Equirectangular projection → SVG coordinates."""
+    return ((lon + 180) / 360 * MAP_W, (90 - lat) / 180 * MAP_H)
+
+
+def cat_color(category: str) -> str:
+    return CATEGORY_COLORS.get(category, "#7c8ab5")
+
+
+def vessel_map(metrics: dict) -> str:
+    pos = metrics.get("vessel_positions", []) or []
+    if not pos:
+        return ""
+    # Continents.
+    conts = ""
+    for poly in CONTINENTS:
+        pts = " ".join(f"{_proj(lo, la)[0]:.1f},{_proj(lo, la)[1]:.1f}" for lo, la in poly)
+        conts += (f'<polygon points="{pts}" fill="#16223f" stroke="#243156" '
+                  f'stroke-width="1" opacity="0.6"/>')
+    # Graticule.
+    grat = ""
+    for lon in range(-150, 151, 30):
+        x = _proj(lon, 0)[0]
+        grat += (f'<line x1="{x:.1f}" y1="0" x2="{x:.1f}" y2="{MAP_H}" '
+                 f'stroke="#1b2647" stroke-width="0.8"/>')
+    for lat in range(-60, 61, 30):
+        y = _proj(0, lat)[1]
+        grat += (f'<line x1="0" y1="{y:.1f}" x2="{MAP_W}" y2="{y:.1f}" '
+                 f'stroke="#1b2647" stroke-width="0.8"/>')
+    # Monitored region boxes + labels.
+    boxes = ""
+    for name, la0, la1, lo0, lo1 in REGION_BOXES:
+        x0, y0 = _proj(lo0, la1)  # top-left (max lat)
+        x1, y1 = _proj(lo1, la0)  # bottom-right (min lat)
+        w = max(x1 - x0, 7)
+        h = max(y1 - y0, 7)
+        boxes += (
+            f'<rect x="{x0 - 3:.1f}" y="{y0 - 3:.1f}" width="{w + 6:.1f}" height="{h + 6:.1f}" '
+            f'rx="3" fill="none" stroke="#5aa6ff" stroke-width="1.3" stroke-dasharray="4,3" opacity="0.85"/>'
+            f'<text x="{x0 - 2:.1f}" y="{y0 - 7:.1f}" fill="#9cc2ff" font-size="12" '
+            f'font-family="Segoe UI, sans-serif" font-weight="600">{esc(name)}</text>'
+        )
+    # Vessel dots.
+    dots = ""
+    for v in pos:
+        try:
+            x, y = _proj(float(v.get("lon", 0)), float(v.get("lat", 0)))
+        except (TypeError, ValueError):
+            continue
+        cat = v.get("category", "Unknown / other")
+        name = v.get("name") or str(v.get("mmsi", ""))
+        dest = v.get("destination") or "—"
+        sog = v.get("sog", 0)
+        tip = f"{name} · {cat} · {v.get('flag_country', '?')} · {sog} kn · → {dest}"
+        dots += (
+            f'<circle class="vdot" cx="{x:.1f}" cy="{y:.1f}" r="3.1" fill="{cat_color(cat)}" '
+            f'fill-opacity="0.92" data-tip="{esc(tip)}"/>'
+        )
+    # Legend from category counts.
+    cats = metrics.get("vessel_categories", []) or []
+    legend = "".join(
+        f'<span class="legend-item"><span class="swatch" style="background:{cat_color(c["category"])}"></span>'
+        f'{esc(c["category"])} <b>({esc(c["count"])})</b></span>'
+        for c in cats
+    )
+    svg = (
+        f'<div class="mapwrap"><svg viewBox="0 0 {MAP_W} {MAP_H}" '
+        f'role="img" aria-label="World map of current vessel positions">'
+        f"{grat}{conts}{boxes}{dots}</svg></div>"
+        f'<div class="legend">{legend}</div>'
+        f'<p class="hint">Each dot is one ship\'s most recent reported position '
+        f'({len(pos)} shown), coloured by vessel class. Dashed boxes are the four monitored '
+        f'regions. Hover a dot for its name, type, flag, speed and destination.</p>'
+    )
+    return svg
+
+
+def category_bars(cats: list[dict]) -> str:
+    if not cats:
+        return '<p class="empty">no data</p>'
+    top = max((c["count"] for c in cats), default=1) or 1
+    out = []
+    for c in cats:
+        pct = round(100 * c["count"] / top, 1)
+        col = cat_color(c["category"])
+        out.append(
+            f'<div class="bar-row"><span class="bar-label">{esc(c["category"])}</span>'
+            f'<span class="bar-track"><span class="bar-fill" style="width:{pct}%;background:{col}"></span></span>'
+            f'<span class="bar-num">{esc(c["count"])}</span></div>'
+        )
+    return '<div class="bars">' + "".join(out) + "</div>"
+
+
+def region_cards(regions: list[dict]) -> str:
+    if not regions:
+        return ""
+    out = []
+    for r in regions:
+        v = r.get("vessels", 0) or 0
+        idle = r.get("idle", 0) or 0
+        moving = r.get("moving", 0) or 0
+        spd = r.get("avg_sog", 0) or 0
+        tot = max(v, 1)
+        mp = round(100 * moving / tot, 1)
+        ip = round(100 * idle / tot, 1)
+        read = "Congested / anchorage" if spd < 3 else "Mixed transit" if spd < 8 else "Free-flowing"
+        out.append(
+            f'<div class="region-card"><div class="rc-name">{esc(r["region"])}</div>'
+            f'<div class="rc-big">{num(v, 0)}<span>vessels</span></div>'
+            f'<div class="rc-seg"><span class="seg-mv" style="width:{mp}%"></span>'
+            f'<span class="seg-id" style="width:{ip}%"></span></div>'
+            f'<div class="rc-meta">{esc(moving)} moving · {esc(idle)} idle · avg {esc(spd)} kn</div>'
+            f'<div class="rc-read">{esc(read)}</div></div>'
+        )
+    return '<div class="region-cards">' + "".join(out) + "</div>"
+
+
+def operational_brief(metrics: dict) -> str:
+    regions = metrics.get("regions", []) or []
+    cats = metrics.get("vessel_categories", []) or []
+    dests = metrics.get("top_destinations", []) or []
+    de = metrics.get("dark_events", {}) or {}
+    com = metrics.get("commodity", {}) or {}
+    anom = metrics.get("anomalies", {}) or {}
+    pos = metrics.get("vessel_positions", []) or []
+    if not (regions or cats or pos):
+        return ""
+    parts = []
+    if regions:
+        busiest = max(regions, key=lambda r: r.get("vessels", 0))
+        spd = busiest.get("avg_sog", 0) or 0
+        read = ("heavy queuing / anchorage activity" if spd < 3
+                else "a mix of transit and waiting" if spd < 8 else "free-flowing transit")
+        parts.append(
+            f"Right now we're tracking <b>{len(pos)}</b> vessels across the four monitored "
+            f"chokepoints. <b>{esc(busiest['region'])}</b> is the busiest with "
+            f"<b>{esc(busiest['vessels'])}</b> vessels at an average <b>{esc(spd)} kn</b> — "
+            f"{read}."
+        )
+    if cats:
+        top_cat = cats[0]
+        tankers = next((c["count"] for c in cats if "Tanker" in c["category"]), 0)
+        parts.append(
+            f"The fleet is led by <b>{esc(top_cat['category'])}</b> "
+            f"(<b>{esc(top_cat['count'])}</b> vessels); tankers carrying oil, gas or chemicals "
+            f"account for <b>{esc(tankers)}</b>."
+        )
+    if dests:
+        d0 = dests[0]
+        tail = f", ahead of {esc(dests[1]['destination'])}" if len(dests) > 1 else ""
+        parts.append(
+            f"The most-declared destination is <b>{esc(d0['destination'])}</b> "
+            f"(<b>{esc(d0['count'])}</b> vessels){tail} — the busiest current corridor."
+        )
+    parts.append(
+        f"Anomaly scan flags <b>{esc(de.get('count', 0))}</b> dark-vessel events (long AIS "
+        f"silences), <b>{esc(com.get('floating_storage_candidates', 0))}</b> idle-tanker / "
+        f"floating-storage candidates and <b>{esc(anom.get('overspeed_count', 0))}</b> over-speed "
+        f"outliers. Each is a <i>candidate</i> signal worth a look — not proof of intent."
+    )
+    return '<div class="panel brief">' + "".join(f"<p>{p}</p>" for p in parts) + "</div>"
+
+
+def anomaly_block(metrics: dict) -> str:
+    de = metrics.get("dark_events", {}) or {}
+    com = metrics.get("commodity", {}) or {}
+    anom = metrics.get("anomalies", {}) or {}
+    layers = metrics.get("layers", {}) or {}
+    if not (anom or de or com):
+        return ""
+    items = [
+        ("HIGH", "red", "Dark-vessel events", de.get("count", 0),
+         "Ships that went silent for an unusually long gap, then reappeared."),
+        ("WATCH", "gold", "Idle tankers (floating storage)", com.get("floating_storage_candidates", 0),
+         "Tankers nearly motionless in one spot for hours — possible offshore storage."),
+        ("WATCH", "purple", "Over-speed outliers", anom.get("overspeed_count", 0),
+         "Vessels reporting >30 kn — rare for large ships; usually a data glitch or a fast craft."),
+        ("INFO", "blue", "Quarantined bad records", layers.get("silver_quarantine", 0),
+         "Messages rejected by quality checks (impossible coordinates, absurd speed, bad ID)."),
+    ]
+    cards = "".join(
+        f'<div class="anom anom-{color}"><span class="sev sev-{color}">{sev}</span>'
+        f'<div class="anom-n">{num(count, 0)}</div><div class="anom-t">{esc(label)}</div>'
+        f'<div class="anom-d">{esc(note)}</div></div>'
+        for sev, color, label, count, note in items
+    )
+    ov = anom.get("overspeed_sample", []) or []
+    ov_tbl = ""
+    if ov:
+        ov_rows = [
+            [r.get("name") or r.get("mmsi"), r.get("flag_country"), r.get("category"), r.get("sog")]
+            for r in ov
+        ]
+        ov_tbl = (
+            '<div class="panel"><h3>Fastest over-speed outliers</h3>'
+            '<p class="hint">Highest reported speeds — worth checking for GPS/AIS glitches.</p>'
+            + table(["Vessel", "Flag", "Type", "SOG (kn)"], ov_rows, "none", numeric={3}, tid="ovtable")
+            + "</div>"
+        )
+    return f'<div class="anoms">{cards}</div>{ov_tbl}'
+
+
 GLOSSARY = [
     ("AIS (Automatic Identification System)",
      "A radio system ships broadcast to announce their identity, position, speed and heading — "
@@ -162,6 +405,16 @@ GLOSSARY = [
     ("Floating storage",
      "Full tankers anchored offshore acting as temporary storage — a classic sign of oversupply "
      "and weak demand."),
+    ("Ship-type code",
+     "AIS includes a number (0–99) for the kind of vessel — e.g. 70–79 cargo, 80–89 tanker, "
+     "60–69 passenger. It tells you the vessel class, not the actual cargo on board."),
+    ("Knot",
+     "A unit of speed at sea: one nautical mile per hour (about 1.85 km/h)."),
+    ("Over-speed outlier",
+     "A position report with an implausibly high speed for the vessel class — usually a GPS/AIS "
+     "glitch, occasionally a genuinely fast craft."),
+    ("COG (Course Over Ground)",
+     "The actual direction a vessel is travelling across the water, in degrees (0–360)."),
 ]
 
 
@@ -233,6 +486,42 @@ def build(metrics: dict) -> str:
         "red",
     )
 
+    # --- New visual sections (render only when the data is present) ---
+    brief_body = operational_brief(metrics)
+    brief_section = section(
+        "🧭 Operational brief — routes & anomalies at a glance",
+        "An auto-generated read of current traffic, cargo mix, busiest corridors and anomalies.",
+        brief_body, "blue",
+    ) if brief_body else ""
+
+    map_body = vessel_map(metrics)
+    map_section = section(
+        "🗺️ Live vessel positions",
+        "Where every tracked ship most recently reported, across the four monitored regions. "
+        "Hover a dot for details; the dashed boxes are the watched chokepoints.",
+        map_body + region_cards(metrics.get("regions", [])),
+        "cyan",
+    ) if map_body else ""
+
+    cats = metrics.get("vessel_categories", [])
+    cargo_section = section(
+        "📦 What's being carried — fleet by ship type",
+        "AIS broadcasts a ship-type code, not a cargo manifest — so this is the mix of vessel "
+        "classes (a proxy for what's moving), counting distinct vessels.",
+        f'<div class="panel">{category_bars(cats)}'
+        '<p class="hint">Tankers (oil · gas · chemical) and cargo ships (containers · bulk) are the '
+        'workhorses of seaborne trade; the rest are service, fishing and passenger craft.</p></div>',
+        "gold",
+    ) if cats else ""
+
+    anom_body = anomaly_block(metrics)
+    anomaly_section = section(
+        "🚨 Anomaly detection",
+        "Automated flags across behaviour, identity and data quality — a triage view before the "
+        "detailed dark-vessel table below.",
+        anom_body, "red",
+    ) if anom_body else ""
+
     glossary = "".join(
         f"<details class='gloss'><summary>{esc(t)}</summary><p>{esc(d)}</p></details>"
         for t, d in GLOSSARY
@@ -260,7 +549,11 @@ def build(metrics: dict) -> str:
           '<span class="ipill">i</span> on any card for a plain-English explanation, and see the '
           '<a href="#glossary-anchor">glossary</a> for terms.</p></section>'
         + '<div class="grid">' + kpis + '</div>'
+        + brief_section
+        + map_section
+        + cargo_section
         + commodity_block(metrics.get("commodity", {}))
+        + anomaly_section
         + dark_section
         + flags_section
         + quar_section
@@ -401,6 +694,54 @@ HEAD = """<!doctype html>
   #tooltip { position:fixed; z-index:50; max-width:260px; background:#0b1330; color:var(--fg);
     border:1px solid var(--line); border-radius:10px; padding:9px 12px; font-size:12.5px;
     box-shadow:0 12px 30px rgba(0,0,0,.5); pointer-events:none; opacity:0; transition:opacity .12s; }
+  /* live vessel map */
+  .mapwrap { margin-top:6px; }
+  .mapwrap svg { width:100%; height:auto; display:block; border-radius:14px;
+    border:1px solid var(--line);
+    background:radial-gradient(120% 130% at 50% 0%, #0c1838 0%, #081027 60%, #060c1f 100%); }
+  .vdot { cursor:pointer; transition:stroke-width .1s ease; }
+  .vdot:hover { stroke:#ffffff; stroke-width:1.6; }
+  .legend { display:flex; flex-wrap:wrap; gap:9px 16px; margin-top:12px; }
+  .legend-item { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--mut); }
+  .legend-item b { color:#dbe4ff; font-weight:700; }
+  .swatch { width:12px; height:12px; border-radius:3px; display:inline-block;
+    box-shadow:0 0 6px rgba(0,0,0,.45); }
+  .region-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+    gap:14px; margin-top:18px; }
+  .region-card { padding:14px 16px; border-radius:14px;
+    background:linear-gradient(160deg, rgba(26,36,66,.55), rgba(11,19,40,.42));
+    backdrop-filter:blur(11px) saturate(135%); -webkit-backdrop-filter:blur(11px) saturate(135%);
+    border:1px solid rgba(255,255,255,.09);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.13), 0 8px 24px rgba(2,6,20,.4); }
+  .rc-name { font-weight:700; color:#dbe4ff; font-size:13.5px; }
+  .rc-big { font-size:27px; font-weight:800; color:var(--cyan); margin:6px 0 4px; }
+  .rc-big span { font-size:12px; color:var(--mut); font-weight:600; margin-left:6px; }
+  .rc-seg { display:flex; height:8px; border-radius:6px; overflow:hidden; background:#0b1230; margin:7px 0; }
+  .rc-seg span { display:block; height:100%; }
+  .rc-seg .seg-mv { background:linear-gradient(90deg,#1f8fb5,#37d6e6); }
+  .rc-seg .seg-id { background:linear-gradient(90deg,#caa033,#ffd24a); }
+  .rc-meta { font-size:11.5px; color:var(--mut); }
+  .rc-read { margin-top:4px; font-size:12px; font-weight:700; color:#cdd7f5; }
+  /* anomaly cards */
+  .anoms { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; }
+  .anom { position:relative; padding:16px; border-radius:14px;
+    background:linear-gradient(160deg, rgba(26,36,66,.55), rgba(11,19,40,.42));
+    backdrop-filter:blur(11px) saturate(135%); -webkit-backdrop-filter:blur(11px) saturate(135%);
+    border:1px solid rgba(255,255,255,.09);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.13), 0 8px 24px rgba(2,6,20,.4); }
+  .anom-n { font-size:30px; font-weight:800; margin-top:8px; }
+  .anom-red .anom-n{ color:var(--red); } .anom-gold .anom-n{ color:var(--gold); }
+  .anom-purple .anom-n{ color:var(--purple); } .anom-blue .anom-n{ color:var(--blue); }
+  .anom-t { font-weight:600; color:#dbe4ff; font-size:13px; margin-top:2px; }
+  .anom-d { color:var(--mut); font-size:11.5px; margin-top:6px; line-height:1.45; }
+  .sev { font-size:10px; font-weight:800; letter-spacing:.6px; padding:2px 9px; border-radius:999px; }
+  .sev-red{ background:rgba(255,107,129,.16); color:var(--red); }
+  .sev-gold{ background:rgba(255,210,74,.16); color:var(--gold); }
+  .sev-purple{ background:rgba(176,140,255,.16); color:var(--purple); }
+  .sev-blue{ background:rgba(90,166,255,.16); color:var(--blue); }
+  .brief { padding:18px; }
+  .brief p { margin:0 0 10px; color:#cdd7f5; line-height:1.6; }
+  .brief p:last-child { margin-bottom:0; }
 </style></head><body>
 """
 
