@@ -96,7 +96,22 @@ def category_expr(col):
     )
 
 
-# Latest static record per vessel (name, type, destination).
+def product_class_expr(col):
+    # AIS encodes a ship-type + IMO hazard-category digit, NOT the literal commodity.
+    # This maps that code to an INFERRED cargo/product class (the closest AIS allows).
+    t = F.col(col)
+    return (
+        F.when(t.isin(80, 85, 86, 87, 88, 89), "Crude oil & petroleum products")
+        .when(t.isin(81, 82, 83, 84), "Chemicals & hazardous liquids")
+        .when(t.isin(70, 75, 76, 77, 78, 79), "Containers & general cargo")
+        .when(t.isin(71, 72, 73, 74), "Hazardous dry cargo")
+        .when(t.between(60, 69), "Passengers (no freight)")
+        .when(t.isNull() | (t == 0), "Unspecified cargo")
+        .otherwise("Non-cargo (service · fishing · other)")
+    )
+
+
+# Latest static record per vessel (name, type, destination, inferred product).
 static_latest = (
     static.withColumn(
         "rn",
@@ -108,12 +123,22 @@ static_latest = (
     )
     .where("rn = 1")
     .select(
-        "mmsi", "ship_name", "destination", category_expr("ship_type").alias("category")
+        "mmsi",
+        "ship_name",
+        "destination",
+        category_expr("ship_type").alias("category"),
+        product_class_expr("ship_type").alias("product"),
     )
 )
 
 vessel_categories = rows(
     static_latest.groupBy("category").agg(F.countDistinct("mmsi").alias("count")).orderBy(F.desc("count")),
+    12,
+)
+
+# How many ships carry each inferred product class.
+cargo_products = rows(
+    static_latest.groupBy("product").agg(F.countDistinct("mmsi").alias("count")).orderBy(F.desc("count")),
     12,
 )
 
@@ -135,8 +160,10 @@ pos_latest = (
     )
 )
 
-pos_enriched = pos_latest.join(static_latest, "mmsi", "left").withColumn(
-    "category", F.coalesce("category", F.lit("Unknown / other"))
+pos_enriched = (
+    pos_latest.join(static_latest, "mmsi", "left")
+    .withColumn("category", F.coalesce("category", F.lit("Unknown / other")))
+    .withColumn("product", F.coalesce("product", F.lit("Unspecified cargo")))
 )
 
 vessel_positions = rows(
@@ -148,6 +175,7 @@ vessel_positions = rows(
         F.coalesce("cog", F.lit(0)).alias("cog"),
         "flag_country",
         "category",
+        "product",
         F.coalesce("ship_name", F.lit("")).alias("name"),
         F.coalesce("destination", F.lit("")).alias("destination"),
     ),
@@ -201,6 +229,31 @@ for _name, *_bounds in REGIONS:
             }
         )
 
+# Where each inferred product class is right now (distinct vessels per product × region).
+# Each vessel has exactly one latest position → one region, so per-region counts sum to the total.
+REGION_ORDER = [name for name, *_ in REGIONS] + ["Open water / transit"]
+_pr = (
+    pos_enriched.withColumn("region", region_expr())
+    .groupBy("product", "region")
+    .agg(F.countDistinct("mmsi").alias("count"))
+    .collect()
+)
+_pl = {}
+for _r in _pr:
+    _pl.setdefault(_r["product"], {})[_r["region"]] = _r["count"]
+product_locations = sorted(
+    (
+        {
+            "product": _prod,
+            "regions": {_rn: _regs.get(_rn, 0) for _rn in REGION_ORDER},
+            "total": sum(_regs.values()),
+        }
+        for _prod, _regs in _pl.items()
+    ),
+    key=lambda x: x["total"],
+    reverse=True,
+)
+
 # Over-speed outliers: implausibly fast for large vessels (likely glitch or fast craft).
 overspeed_df = pos_enriched.where("sog > 30 AND sog <= 102.3")
 anomalies = {
@@ -223,6 +276,9 @@ metrics = {
     "generated_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
     "commodity": commodity,
     "vessel_categories": vessel_categories,
+    "cargo_products": cargo_products,
+    "product_locations": product_locations,
+    "region_order": REGION_ORDER,
     "vessel_positions": vessel_positions,
     "regions": regions,
     "anomalies": anomalies,

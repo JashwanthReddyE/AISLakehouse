@@ -146,6 +146,17 @@ CATEGORY_COLORS = {
     "Unknown / other": "#7c8ab5",
 }
 
+# Inferred-product colours — shared by the product bars, the product map mode and the matrix.
+PRODUCT_COLORS = {
+    "Crude oil & petroleum products": "#ffd24a",
+    "Chemicals & hazardous liquids": "#ff6b81",
+    "Containers & general cargo": "#37d6e6",
+    "Hazardous dry cargo": "#e0913e",
+    "Passengers (no freight)": "#ff79c6",
+    "Non-cargo (service · fishing · other)": "#5aa6ff",
+    "Unspecified cargo": "#7c8ab5",
+}
+
 # Monitored chokepoints drawn on the map (name, lat_min, lat_max, lon_min, lon_max).
 REGION_BOXES = [
     ("Singapore", 0.4, 2.0, 102.8, 105.4),
@@ -183,6 +194,10 @@ def cat_color(category: str) -> str:
     return CATEGORY_COLORS.get(category, "#7c8ab5")
 
 
+def prod_color(product: str) -> str:
+    return PRODUCT_COLORS.get(product, "#7c8ab5")
+
+
 def vessel_map(metrics: dict) -> str:
     pos = metrics.get("vessel_positions", []) or []
     if not pos:
@@ -216,7 +231,8 @@ def vessel_map(metrics: dict) -> str:
             f'<text x="{x0 - 2:.1f}" y="{y0 - 7:.1f}" fill="#9cc2ff" font-size="12" '
             f'font-family="Segoe UI, sans-serif" font-weight="600">{esc(name)}</text>'
         )
-    # Vessel dots.
+    # Vessel dots — each carries both a vessel-class colour (data-c) and a product colour
+    # (data-p) so the map can recolour instantly when the user flips the toggle.
     dots = ""
     for v in pos:
         try:
@@ -224,29 +240,45 @@ def vessel_map(metrics: dict) -> str:
         except (TypeError, ValueError):
             continue
         cat = v.get("category", "Unknown / other")
+        product = v.get("product", "Unspecified cargo")
         name = v.get("name") or str(v.get("mmsi", ""))
         dest = v.get("destination") or "—"
         sog = v.get("sog", 0)
-        tip = f"{name} · {cat} · {v.get('flag_country', '?')} · {sog} kn · → {dest}"
+        tip = f"{name} ({v.get('flag_country', '?')}) · cargo: {product} · {sog} kn · → {dest}"
+        cc, pc = cat_color(cat), prod_color(product)
         dots += (
-            f'<circle class="vdot" cx="{x:.1f}" cy="{y:.1f}" r="3.1" fill="{cat_color(cat)}" '
-            f'fill-opacity="0.92" data-tip="{esc(tip)}"/>'
+            f'<circle class="vdot" cx="{x:.1f}" cy="{y:.1f}" r="3.1" fill="{cc}" '
+            f'fill-opacity="0.92" data-c="{cc}" data-p="{pc}" data-tip="{esc(tip)}"/>'
         )
-    # Legend from category counts.
+    # Two legends (class + product); the toggle shows one at a time.
     cats = metrics.get("vessel_categories", []) or []
-    legend = "".join(
+    prods = metrics.get("cargo_products", []) or []
+    legend_cat = "".join(
         f'<span class="legend-item"><span class="swatch" style="background:{cat_color(c["category"])}"></span>'
         f'{esc(c["category"])} <b>({esc(c["count"])})</b></span>'
         for c in cats
     )
+    legend_prod = "".join(
+        f'<span class="legend-item"><span class="swatch" style="background:{prod_color(p["product"])}"></span>'
+        f'{esc(p["product"])} <b>({esc(p["count"])})</b></span>'
+        for p in prods
+    )
+    toggle = (
+        '<div class="maptoggle">Colour ships by: '
+        '<button type="button" class="mt-btn active" data-mode="c">Vessel class</button>'
+        '<button type="button" class="mt-btn" data-mode="p">Cargo / product</button></div>'
+    )
     svg = (
+        f"{toggle}"
         f'<div class="mapwrap"><svg viewBox="0 0 {MAP_W} {MAP_H}" '
         f'role="img" aria-label="World map of current vessel positions">'
         f"{grat}{conts}{boxes}{dots}</svg></div>"
-        f'<div class="legend">{legend}</div>'
+        f'<div class="legend" data-leg="c">{legend_cat}</div>'
+        f'<div class="legend" data-leg="p" style="display:none">{legend_prod}</div>'
         f'<p class="hint">Each dot is one ship\'s most recent reported position '
-        f'({len(pos)} shown), coloured by vessel class. Dashed boxes are the four monitored '
-        f'regions. Hover a dot for its name, type, flag, speed and destination.</p>'
+        f'({len(pos)} shown). Use the toggle to colour by <b>vessel class</b> or by '
+        f'<b>inferred cargo / product</b>. Dashed boxes are the four monitored regions; '
+        f'hover a dot for its name, flag, cargo, speed and destination.</p>'
     )
     return svg
 
@@ -265,6 +297,50 @@ def category_bars(cats: list[dict]) -> str:
             f'<span class="bar-num">{esc(c["count"])}</span></div>'
         )
     return '<div class="bars">' + "".join(out) + "</div>"
+
+
+def product_bars(prods: list[dict]) -> str:
+    if not prods:
+        return '<p class="empty">no data</p>'
+    top = max((p["count"] for p in prods), default=1) or 1
+    out = []
+    for p in prods:
+        pct = round(100 * p["count"] / top, 1)
+        col = prod_color(p["product"])
+        out.append(
+            f'<div class="bar-row"><span class="bar-label">{esc(p["product"])}</span>'
+            f'<span class="bar-track"><span class="bar-fill" style="width:{pct}%;background:{col}"></span></span>'
+            f'<span class="bar-num">{esc(p["count"])}</span></div>'
+        )
+    return '<div class="bars wide">' + "".join(out) + "</div>"
+
+
+def _short_region(name: str) -> str:
+    if name == "Open water / transit":
+        return "In transit"
+    return name.split(" & ")[0].replace("Strait of ", "")
+
+
+def product_location_table(metrics: dict) -> str:
+    pl = metrics.get("product_locations", []) or []
+    order = metrics.get("region_order", []) or []
+    if not pl or not order:
+        return ""
+    heads = ["Product"] + [_short_region(r) for r in order] + ["Total"]
+    ths = "".join(f"<th>{esc(h)}</th>" for h in heads)
+    body = ""
+    for row in pl:
+        regs = row.get("regions", {}) or {}
+        cells = "".join(f"<td>{esc(regs.get(r, 0))}</td>" for r in order)
+        body += (
+            f'<tr><td class="prod-cell"><span class="swatch" '
+            f'style="background:{prod_color(row["product"])}"></span>{esc(row["product"])}</td>'
+            f'{cells}<td><b>{esc(row.get("total", 0))}</b></td></tr>'
+        )
+    return (
+        '<div class="table-wrap"><table class="data-table matrix">'
+        f"<thead><tr>{ths}</tr></thead><tbody>{body}</tbody></table></div>"
+    )
 
 
 def region_cards(regions: list[dict]) -> str:
@@ -408,6 +484,10 @@ GLOSSARY = [
     ("Ship-type code",
      "AIS includes a number (0–99) for the kind of vessel — e.g. 70–79 cargo, 80–89 tanker, "
      "60–69 passenger. It tells you the vessel class, not the actual cargo on board."),
+    ("Inferred product / cargo class",
+     "Derived from the AIS ship-type and its IMO hazard-category digit (A–D). It tells you the "
+     "broad cargo family (e.g. oil tanker vs chemical/gas tanker vs container ship) but never the "
+     "exact commodity — that needs an external vessel registry like IHS or Equasis."),
     ("Knot",
      "A unit of speed at sea: one nautical mile per hour (about 1.85 km/h)."),
     ("Over-speed outlier",
@@ -504,15 +584,40 @@ def build(metrics: dict) -> str:
     ) if map_body else ""
 
     cats = metrics.get("vessel_categories", [])
+    prods = metrics.get("cargo_products", [])
+    cargo_body = ""
+    if prods:
+        cargo_body += (
+            '<div class="panel"><h3>Products being carried '
+            '<span class="muted">(inferred from AIS ship-type · distinct ships)</span></h3>'
+            + product_bars(prods)
+            + '<p class="disclaimer"><b>Inferred, not declared.</b> AIS broadcasts a ship-type + IMO '
+            'hazard-category code, never the actual commodity. So &ldquo;Crude oil &amp; petroleum '
+            'products&rdquo; means a vessel AIS classifies as an oil tanker — the exact grade (crude '
+            'vs diesel vs jet fuel) and gas carriers (LNG / LPG) can&rsquo;t be separated without an '
+            'external vessel registry such as IHS or Equasis.</p></div>'
+        )
+        ptbl = product_location_table(metrics)
+        if ptbl:
+            cargo_body += (
+                '<div class="panel"><h3>Where those products are right now</h3>'
+                '<p class="hint">Distinct vessels of each product class currently in each monitored '
+                'region (or in transit between them) — click the live map toggle above to see them '
+                'coloured by cargo.</p>' + ptbl + "</div>"
+            )
+    if cats:
+        cargo_body += (
+            '<div class="panel"><h3>Full fleet by vessel class</h3>'
+            + category_bars(cats)
+            + '<p class="hint">The broader operational mix, including service, fishing and passenger '
+            "craft that don't carry tradeable cargo.</p></div>"
+        )
     cargo_section = section(
-        "📦 What's being carried — fleet by ship type",
-        "AIS broadcasts a ship-type code, not a cargo manifest — so this is the mix of vessel "
-        "classes (a proxy for what's moving), counting distinct vessels.",
-        f'<div class="panel">{category_bars(cats)}'
-        '<p class="hint">Tankers (oil · gas · chemical) and cargo ships (containers · bulk) are the '
-        'workhorses of seaborne trade; the rest are service, fishing and passenger craft.</p></div>',
-        "gold",
-    ) if cats else ""
+        "📦 Cargo & products carried",
+        "What the ships are carrying (inferred from their AIS ship-type), how many carry each, and "
+        "where those products are located right now.",
+        cargo_body, "gold",
+    ) if cargo_body else ""
 
     anom_body = anomaly_block(metrics)
     anomaly_section = section(
@@ -742,6 +847,22 @@ HEAD = """<!doctype html>
   .brief { padding:18px; }
   .brief p { margin:0 0 10px; color:#cdd7f5; line-height:1.6; }
   .brief p:last-child { margin-bottom:0; }
+  /* map colour toggle */
+  .maptoggle { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12.5px;
+    color:var(--mut); margin-bottom:11px; }
+  .mt-btn { background:rgba(90,166,255,.10); color:var(--mut); border:1px solid var(--line);
+    border-radius:999px; padding:5px 13px; font-size:12px; cursor:pointer; font-weight:600;
+    transition:background .15s, color .15s, border-color .15s; }
+  .mt-btn:hover { color:var(--fg); }
+  .mt-btn.active { background:linear-gradient(90deg,#1f8fb5,#37d6e6); color:#07101f; border-color:transparent; }
+  /* products */
+  .muted { color:var(--mut); font-weight:400; font-size:12px; }
+  .bars.wide .bar-row { grid-template-columns:236px 1fr 46px; }
+  @media (max-width:720px){ .bars.wide .bar-row { grid-template-columns:130px 1fr 40px; } }
+  table.matrix td.prod-cell { white-space:nowrap; color:#dbe4ff; }
+  table.matrix .swatch { width:10px; height:10px; margin-right:7px; vertical-align:middle; }
+  table.matrix th:not(:first-child), table.matrix td:not(.prod-cell) {
+    text-align:right; font-variant-numeric:tabular-nums; }
 </style></head><body>
 """
 
@@ -843,6 +964,16 @@ document.querySelectorAll('.filter').forEach(inp=>{
   inp.addEventListener('input',()=>{ const q=inp.value.toLowerCase();
     const tb=document.getElementById(inp.dataset.target);
     [...tb.tBodies[0].rows].forEach(r=>{ r.style.display = r.textContent.toLowerCase().includes(q)?'':'none'; });
+  });
+});
+
+/* Live-map colour toggle: vessel class <-> inferred cargo/product */
+document.querySelectorAll('.mt-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const mode=btn.dataset.mode; /* 'c' or 'p' */
+    document.querySelectorAll('.mt-btn').forEach(b=>b.classList.toggle('active', b===btn));
+    document.querySelectorAll('.vdot').forEach(d=>{ const col=d.dataset[mode]; if(col) d.setAttribute('fill', col); });
+    document.querySelectorAll('.legend[data-leg]').forEach(l=>{ l.style.display = (l.dataset.leg===mode)?'flex':'none'; });
   });
 });
 </script>
